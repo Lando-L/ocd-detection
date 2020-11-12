@@ -15,10 +15,11 @@ def arg_parser() -> argparse.ArgumentParser:
     parser.add_argument('path', type=str)
 
     # Hyperparameter
-    parser.add_argument('--learning-rate', type=float, default=0.01)
+    parser.add_argument('--learning-rate', type=float, default=.01)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--window-size', type=int, default=64)
+    parser.add_argument('--keep-state-rate', type=float, default=.5)
 
     # Model
     parser.add_argument('--hidden-size', type=int, default=64)
@@ -126,6 +127,10 @@ def main():
             test_accuracy=val_accuracy
         ),
         input_signature=signature
+    )
+
+    state_fn = partial(
+        
     )
 
     print('Training for {} epochs'.format(args.epochs))

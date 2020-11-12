@@ -9,6 +9,7 @@ from ocddetection.models.bidirectional import Bidirectional
 def build(hidden_size: int, output_size: int, dropout_rate: float) -> Bidirectional:
     return Bidirectional(hidden_size, output_size, dropout_rate)
 
+
 def train_step(X, y, fwd_state, bwd_state, model, optimizer, loss_fn, train_loss, train_accuracy):
     with tf.GradientTape() as tape:
         y_hat, fwd_state, bwd_state = model(X, [fwd_state, bwd_state], training=True)
