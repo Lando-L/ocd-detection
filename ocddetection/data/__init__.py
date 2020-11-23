@@ -91,7 +91,7 @@ def to_centralised(df: pd.DataFrame) -> tf.data.Dataset:
 
 def to_federated(df: pd.DataFrame) -> Tuple[np.ndarray, Dict[int, tf.data.Dataset]]:
     client_ids = df.index.levels[0]
-    client_paths = df_train.groupby(level=[0]).agg(list)['path'].to_dict()
+    client_paths = df.groupby(level=[0]).agg(list)['path'].to_dict()
     client_datasets = {client: to_dataset(paths) for client, paths in client_paths.items()}
 
     return client_ids, client_datasets
@@ -99,7 +99,7 @@ def to_federated(df: pd.DataFrame) -> Tuple[np.ndarray, Dict[int, tf.data.Datase
 
 def preprocess(t, sensors: List[int], label: int, table):
     X = tf.cast(tf.gather(t, sensors), tf.float32)
-    y = tf.cast(table.lookup(tf.cast(t[label], tf.int32)), tf.float32)
+    y = table.lookup(tf.cast(t[label], tf.int32))
 
     return X, y
 
@@ -107,7 +107,7 @@ def preprocess(t, sensors: List[int], label: int, table):
 def filter_nan(X, y):
     return not tf.math.reduce_any(
         tf.math.is_nan(
-            tf.concat((X, tf.expand_dims(y, axis=-1)), axis=-1)
+            tf.concat((X, tf.cast(tf.expand_dims(y, axis=-1), tf.float32)), axis=-1)
         )
     )
 
