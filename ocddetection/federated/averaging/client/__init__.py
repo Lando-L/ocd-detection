@@ -1,10 +1,13 @@
 import attr
 
 import tensorflow as tf
+import tensorflow_federated as tff
+
+from ocddetection.federated.averaging import server
 
 
 @attr.s(eq=False, frozen=True, slots=True)
-class ClientOutput(object):
+class Output(object):
     """
     Structure for outputs returned from clients during federated optimization.
     
@@ -19,7 +22,14 @@ class ClientOutput(object):
     metrics = attr.ib()
 
 
-def update(dataset, message, model, optimizer):
+def update(
+    dataset: tf.data.Dataset,
+    message: server.Message,
+    model: tff.learning.Model,
+    optimizer: tf.keras.optimizers.Optimizer
+) -> Output:
+    tff.utils.assign(model.trainable_variables, message.trainable_variables)
+    
     client_weight = tf.constant(0, dtype=tf.int32)
 
     for batch in dataset:
@@ -41,7 +51,7 @@ def update(dataset, message, model, optimizer):
         message.trainable_variables
     )
     
-    return ClientOutput(
+    return Output(
         weights_delta=weights_delta,
         client_weight=tf.cast(client_weight, dtype=tf.float32),
         metrics=model.report_local_outputs()

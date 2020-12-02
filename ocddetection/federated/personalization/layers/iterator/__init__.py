@@ -1,0 +1,174 @@
+import attr
+from functools import partial
+from typing import Callable
+
+import tensorflow as tf
+import tensorflow_federated as tff
+
+from ocddetection.federated.personalization.layers import client, server, utils
+
+
+MODEL_FN = Callable[[], utils.PersonalizationLayersDecorator]
+OPTIMIZER_FN = Callable[[], tf.keras.optimizers.Optimizer]
+CLIENT_STATE_FN = Callable[[], client.State]
+CLIENT_UPDATE_FN = Callable[[tf.data.Dataset, client.State, server.Message, utils.PersonalizationLayersDecorator, tf.keras.optimizers.Optimizer], client.Output]
+SERVER_UPDATE_FN = Callable[[utils.PersonalizationLayersDecorator, tf.keras.optimizers.Optimizer, server.State, list], server.State]
+TRANSFORMATION_FN = Callable[[server.State], server.Message]
+
+
+def __initialize_optimizer(
+    model: utils.PersonalizationLayersDecorator,
+    optimizer: tf.keras.optimizers.Optimizer
+):
+    model_delta = tf.nest.map_structure(tf.zeros_like, model.base_variables)
+
+    optimizer.apply_gradients(
+        tf.nest.map_structure(
+            lambda x, v: (tf.zeros_like(x), v),
+            tf.nest.flatten(model_delta),
+            tf.nest.flatten(model.base_variables)
+        )
+    )
+    
+    assert optimizer.variables()
+
+
+def __initialize_server(
+    model_fn: MODEL_FN,
+    optimizer_fn: OPTIMIZER_FN
+):
+    model = model_fn()
+    optimizer = optimizer_fn()
+    __initialize_optimizer(model, optimizer)
+
+    return server.State(
+        base_variables=model.base_variables,
+        optimizer_state=optimizer.variables(),
+        round_num=0
+    )
+
+
+def __update_server(
+    state: server.State,
+    weights_delta: list,
+    model_fn: MODEL_FN,
+    optimizer_fn: OPTIMIZER_FN,
+    update_fn: SERVER_UPDATE_FN
+):
+    model = model_fn()
+    optimizer = optimizer_fn()
+    __initialize_optimizer(model, optimizer)
+
+    return update_fn(
+        model,
+        optimizer,
+        state,
+        weights_delta
+    )
+
+
+def __update_client(
+    dataset: tf.data.Dataset,
+    state: client.State,
+    message: server.Message,
+    model_fn: MODEL_FN,
+    optimizer_fn: OPTIMIZER_FN,
+    update_fn: CLIENT_UPDATE_FN
+) -> client.Output:
+    model = model_fn()
+    optimizer = optimizer_fn()
+
+    return update_fn(
+        dataset,
+        state,
+        message,
+        model,
+        optimizer
+    )
+
+
+def __state_to_message(
+    state: server.State,
+    transformation_fn: TRANSFORMATION_FN
+) -> server.Message:
+    return transformation_fn(state)
+
+
+def iterator(
+    model_fn: MODEL_FN,
+    client_state_fn: CLIENT_STATE_FN,
+    server_optimizer_fn: OPTIMIZER_FN,
+    client_optimizer_fn: OPTIMIZER_FN
+):
+    model = model_fn()
+    
+    init_tf = tff.tf_computation(
+        lambda: __initialize_server(
+            model_fn,
+            server_optimizer_fn
+        )
+    )
+    
+    server_state_type = init_tf.type_signature.result
+    client_state_type = tff.framework.type_from_tensors(client_state_fn())
+
+    update_server_tf = tff.tf_computation(
+        lambda state, weights_delta: __update_server(
+            state,
+            weights_delta,
+            model_fn,
+            server_optimizer_fn,
+            tf.function(server.update)
+        ),
+        (server_state_type, server_state_type.base_variables)
+    )
+
+    state_to_message_tf = tff.tf_computation(
+        lambda state: __state_to_message(
+            state,
+            tf.function(server.to_message)
+        ),
+        server_state_type
+    )
+
+    dataset_type = tff.SequenceType(model.input_spec)
+    server_message_type = state_to_message_tf.type_signature.result
+    
+    update_client_tf = tff.tf_computation(
+        lambda dataset, state, message: __update_client(
+            dataset,
+            state,
+            message,
+            model_fn,
+            client_optimizer_fn,
+            tf.function(client.update)
+        ),
+        (dataset_type, client_state_type, server_message_type)
+    )
+    
+    federated_server_state_type = tff.type_at_server(server_state_type)
+    federated_dataset_type = tff.type_at_clients(dataset_type)
+    federated_client_state_type = tff.type_at_clients(client_state_type)
+    
+    def init_tff():
+        return tff.federated_value(init_tf(), tff.SERVER)
+    
+    def next_tff(server_state, datasets, client_states):
+        message = tff.federated_map(state_to_message_tf, server_state)
+        broadcast = tff.federated_broadcast(message)
+
+        outputs = tff.federated_map(update_client_tf, (datasets, client_states, broadcast))
+        weights_delta = tff.federated_mean(outputs.weights_delta, weight=outputs.client_weight)
+        metrics = model.federated_output_computation(outputs.metrics)
+
+        next_state = tff.federated_map(update_server_tf, (server_state, weights_delta))
+
+        return next_state, metrics, outputs.client_state
+    
+    return tff.templates.IterativeProcess(
+        initialize_fn=tff.federated_computation(init_tff),
+        next_fn=tff.federated_computation(
+            next_tff,
+            (federated_server_state_type, federated_dataset_type, federated_client_state_type)
+        )
+    )

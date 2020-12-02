@@ -1,5 +1,4 @@
 import attr
-
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -20,7 +19,24 @@ class State(object):
     round_num = attr.ib()
 
 
-def update(model, optimizer, state, weights_delta):
+@attr.s(eq=False, frozen=True, slots=True)
+class Message(object):
+    """
+    Structure for tensors broadcasted by server during federated optimization.
+    
+    Fields:
+        - `trainable_variables`: A dictionary of model's trainable variables.
+    """
+
+    trainable_variables = attr.ib()
+
+
+def update(
+    model: tff.learning.Model,
+    optimizer: tf.keras.optimizers.Optimizer,
+    state: State,
+    weights_delta: list
+) -> State:
     tff.utils.assign(model.trainable_variables, state.trainable_variables)
     tff.utils.assign(optimizer.variables(), state.optimizer_state)
 
@@ -37,4 +53,9 @@ def update(model, optimizer, state, weights_delta):
         trainable_variables=model.trainable_variables,
         optimizer_state=optimizer.variables(),
         round_num=state.round_num + 1
+    )
+
+def to_message(state: State) -> Message:
+    return Message(
+        state.trainable_variables
     )
