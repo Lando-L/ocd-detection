@@ -1,10 +1,10 @@
-from ocddetection.centralized import learning
+from ocddetection.localized import learning
 
 
 def main() -> None:
     learning.run(
         'Human Activity Recognition',
-        'Centralized'
+        'Localized'
     )
 
 
