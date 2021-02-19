@@ -40,7 +40,7 @@ def __server_optimizer_fn() -> tf.keras.optimizers.Optimizer:
 
 
 def __client_optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-    return tf.keras.optimizers.SGD(learning_rate)
+    return tf.keras.optimizers.SGD(learning_rate, momentum=.9)
 
 
 def __client_state_fn(idx: int, weights: tff.learning.ModelWeights):

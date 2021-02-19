@@ -20,7 +20,7 @@ def __arg_parser() -> ArgumentParser:
     # Hyperparameter
     parser.add_argument('--learning-rate', type=float, default=.1)
     parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--window-size', type=int, default=30)
 
     # Model
@@ -72,7 +72,7 @@ def __model_fn(window_size: int, hidden_size: int, dropout_rate: float) -> tf.ke
 
 
 def __optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-    return tf.keras.optimizers.SGD(learning_rate)
+    return tf.keras.optimizers.SGD(learning_rate, momentum=.9)
 
 
 def run(experiment_name: str, run_name: str) -> None:

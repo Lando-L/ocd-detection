@@ -47,11 +47,11 @@ class Evaluation(object):
     Structure for outputs returned from clients during federated evaluation.
     
     Fields:
-        - `client_weight`: Weight to be used in a weighted mean when aggregating `weights_delta`
         - `metrics`: A structure matching `tff.learning.Model.report_local_outputs`, reflecting the results of training on the input dataset.
     """
-    client_weight = attr.ib()
+
     metrics = attr.ib()
+    confusion_matrix = attr.ib()
 
 
 def __mix_weights(
@@ -189,12 +189,21 @@ def evaluate(
 ):
     mixing_coefficient.assign(state.mixing_coefficient)
     __mix_weights(mixing_coefficient, state.model, weights).assign_weights_to(model)
-    client_weight = tf.constant(0, dtype=tf.int32)
 
-    for batch in dataset:
-        model.forward_pass(batch, training=False)
+    y = tf.TensorArray(tf.int32, size=0, dynamic_size=True)
+    y_hat = tf.TensorArray(tf.float32, size=0, dynamic_size=True)
+
+    for idx, batch in enumerate(dataset):
+        outputs = model.forward_pass(batch, training=False)
+        y = y.write(tf.cast(idx, dtype=tf.int32), batch[1])
+        y_hat = y_hat.write(tf.cast(idx, dtype=tf.int32), outputs.predictions)
+    
+    confusion_matrix = tf.math.confusion_matrix(
+        tf.reshape(y.concat(), (-1,)),
+        tf.reshape(tf.cast(tf.argmax(y_hat.concat(), axis=-1), dtype=tf.int32), (-1,))
+    )
 
     return Evaluation(
-        client_weight=tf.cast(client_weight, dtype=tf.float32),
-        metrics=model.report_local_outputs()
+        metrics=model.report_local_outputs(),
+        confusion_matrix=confusion_matrix
     )

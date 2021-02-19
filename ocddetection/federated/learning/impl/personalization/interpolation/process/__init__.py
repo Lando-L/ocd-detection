@@ -235,8 +235,9 @@ def evaluator(
         broadcast = tff.federated_broadcast(weights)
         outputs = tff.federated_map(evaluate_client_tf, (datasets, client_states, broadcast))
         metrics = model.federated_output_computation(outputs.metrics)
+        confusion_matrix = outputs.confusion_matrix
 
-        return metrics
+        return metrics, confusion_matrix
 
     return tff.federated_computation(
         evaluate,

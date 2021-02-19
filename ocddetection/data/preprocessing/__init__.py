@@ -43,7 +43,7 @@ MID_LEVEL_LABELS = [
     (404508, 'Close Drawer 3'),
     (408512, 'Clean Table'),
     (407521, 'Drink from Cup'),
-    (405506, 'Toggle Switch)')
+    (405506, 'Toggle Switch')
 ]
 
 LABEL2IDX = {label: i for i, (label, _) in enumerate(MID_LEVEL_LABELS)}

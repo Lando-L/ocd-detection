@@ -88,7 +88,7 @@ def __model_fn(window_size: int, hidden_size: int, dropout_rate: float) -> tf.ke
 
 
 def __optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-    return tf.keras.optimizers.SGD(learning_rate)
+    return tf.keras.optimizers.SGD(learning_rate, momentum=.9)
 
 
 def __train_step_fn(X, y, model, optimizer, loss_fn, loss, metrics) -> None:

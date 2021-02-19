@@ -1,7 +1,9 @@
 from functools import partial, reduce
 from typing import Callable, Dict, List, Tuple
 
+import matplotlib.pylab as plt
 import mlflow
+import seaborn as sns
 import tensorflow as tf
 import tensorflow_federated as tff
 
@@ -38,14 +40,14 @@ def __evaluation_step(
     client_states: ClientState,
     dataset: FederatedDataset,
     evaluate_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset], List[ClientState]], Metrics]
-) -> Metrics:
-    return common.update_test_metrics(
-        evaluate_fn(
-            weights,
-            [dataset.data[client] for client in dataset.clients],
-            [client_states[client] for client in dataset.clients]
-        )
+) -> Tuple[Metrics, List[tf.Tensor]]:
+    metrics, analysis = evaluate_fn(
+        weights,
+        [dataset.data[client] for client in dataset.clients],
+        [client_states[client] for client in dataset.clients]
     )
+
+    return common.update_test_metrics(metrics), analysis
 
 
 def __step(
@@ -58,8 +60,17 @@ def __step(
         mlflow.log_metrics(metrics['train'], step=round_num)
 
         if round_num % evaluation_round_rate == 0:
-            test_metrics = evaluation_step_fn(state.model, client_states)
+            test_metrics, test_analysis = evaluation_step_fn(state.model, client_states)
             mlflow.log_metrics(test_metrics, step=round_num)
+
+            for idx, t in enumerate(test_analysis):
+                fig, ax = plt.subplots()
+                cm = t / t.numpy().sum(axis=1)[:, tf.newaxis]
+                sns.heatmap(cm, annot=True, ax=ax)
+                plt.xlabel('Predicted')
+                plt.ylabel('True')
+                mlflow.log_figure(fig, f'cm_{round_num}_{idx}.png')
+                plt.close(fig)
 
         return state, client_states
     

@@ -20,10 +20,10 @@ def arg_parser() -> ArgumentParser:
     parser.add_argument('--evaluation-rate', type=int, default=5)
 
     # Hyperparameter
-    parser.add_argument('--clients-per-round', type=int, default=2)
+    parser.add_argument('--clients-per-round', type=int, default=3)
     parser.add_argument('--learning-rate', type=float, default=.1)
     parser.add_argument('--rounds', type=int, default=50)
-    parser.add_argument('--epochs', type=int, default=3)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--window-size', type=int, default=30)
 
