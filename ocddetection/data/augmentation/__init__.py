@@ -1,8 +1,8 @@
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 import csv
 from itertools import cycle
 from functools import partial, reduce
-from typing import Callable, List, Set, Text
+from typing import Callable, Dict, List, Set, Text, Tuple
 
 import matplotlib.pylab as plt
 import numpy as np
@@ -12,9 +12,12 @@ import tensorflow as tf
 from ocddetection.data import preprocessing
 
 
-TABLE = dict(preprocessing.MID_LEVEL_LABELS)
-Stateful = namedtuple('State', ['action', 'start', 'end'])
+Stateful = namedtuple('State', ['group', 'action', 'start', 'end'])
 Action = namedtuple('Action', ['start', 'end'])
+
+TABLE = dict(preprocessing.MID_LEVEL_LABELS)
+
+TRANSITION_FN = Callable[[pd.Timedelta, pd.Timedelta], Stateful]
 
 def __map_fn(t):
     return tf.gather(t, [0] + preprocessing.SENSORS + [preprocessing.MID_LEVEL])
@@ -36,75 +39,149 @@ def __dataframe(path: Text) -> pd.DataFrame:
     return df.set_index(pd.to_timedelta(df[0], 'ms')).drop(columns=[0])
 
 
-def __one_state_action(action: Text):
+def __one_state_action_fn(group: Text, action: Text) -> TRANSITION_FN:
     def state(start: pd.Timedelta, end: pd.Timedelta) -> Stateful:
-        return Stateful(action, start, end)
+        return Stateful(group, action, start, end)
 
     return state
 
 
-def __two_state_action(action_open: Text, action_close: Text):
+def __two_state_action_fn(
+    group: Text,
+    action_open: Text,
+    action_close: Text
+) -> Tuple[TRANSITION_FN, TRANSITION_FN, TRANSITION_FN]:
     def open_state(start: pd.Timedelta, end: pd.Timedelta) -> Stateful:
-        return Stateful(action_open, start, end)
+        return Stateful(group, action_open, start, end)
 
     def null_state(start: pd.Timedelta, end: pd.Timedelta) -> Stateful:
-        return Stateful('Null', start, end)
+        return Stateful(group, 'Null', start, end)
 
     def close_state(start: pd.Timedelta, end: pd.Timedelta) -> Stateful:
-        return Stateful(action_close, start, end)
+        return Stateful(group, action_close, start, end)
     
     return open_state, null_state, close_state
 
 
-def __action_selection(actions: Set[Text], df: pd.DataFrame) -> pd.Series:
-    return df[df[df.columns[-1]].isin(actions)][df.columns[-1]]
-
-
-def __one_state_action_windows(
-    ss: pd.Series,
-    action: Text,
-    one_state_action_fn: Callable[[pd.Timedelta, pd.Timedelta], Stateful]
-) -> List[Action]:
-    state = one_state_action_fn(None, None)
-    actions = []
-
-    for index, value in ss.items():
-        if value == action:
-            
-
-
-def __action_windows(ss: pd.Series) -> List[Action]:
-    state = __open_state(None, None)
-    actions = []
-
-    for index, value in ss.items():
-        if value == 'Open Fridge':
-            if state.action == 'Null':
-                state = __open_state(index, index)
-
-            elif state.action == 'Close Fridge':
-                actions.append(Action(state.start, state.end))
-                state = __open_state(index, index)
-            
-            else:
-                state = __open_state(state.start or index, index)
-                    
-        elif value == 'Null':
-            if state.action == 'Close Fridge':
-                actions.append(Action(state.start, state.end))
-                state = __null_state(None, None)
-                
-            else:
-                state = __null_state(state.start, index)
-            
-        elif value == 'Close Fridge':
-            state = __close_state(state.start, index)
+def __one_state_action_state_machine(
+    state: Stateful,
+    index: pd.Timedelta,
+    item: Text,
+    actions: List[Action],
+    state_action: Text,
+    state_fn: TRANSITION_FN,
+    outer_state: Stateful
+) -> Tuple[Stateful, List[Action]]:
+    if state.action == state_action:
+        if item == state_action:
+            return state_fn(state.start, index), actions
+        
+        else:
+            return outer_state, actions + [Action(state.start, state.end)]
     
-    return actions
+    else:
+        if item == state_action:
+            return state_fn(index, index), actions
+        
+        else:
+            return outer_state, actions
 
 
-def __actions(df: pd.DataFrame) -> List[Action]:
-    return __action_windows(__action_selection(df))
+def __two_state_action_state_machine(
+    state: Stateful,
+    index: pd.Timedelta,
+    item: Text,
+    actions: List[Action],
+    open_action: Text,
+    open_state_fn: TRANSITION_FN,
+    padding_action: Text,
+    padding_state_fn: TRANSITION_FN,
+    close_action: Text,
+    close_state_fn: TRANSITION_FN,
+    outer_state: Stateful
+) -> Tuple[Stateful, List[Action]]:
+    if state.action == open_action:
+        if item == open_action:
+            return open_state_fn(state.start, index), actions
+        
+        elif item == padding_action:
+            return padding_state_fn(state.start, index), actions
+        
+        elif item == close_action:
+            return close_state_fn(state.start, index), actions
+        
+        else:
+            return outer_state, actions
+    
+    elif state.action == padding_action:
+        if item == open_action:
+            return open_state_fn(index, index), actions
+        
+        elif item == padding_action:
+            return padding_state_fn(state.start, index), actions
+        
+        elif item == close_action:
+            return close_state_fn(state.start, index), actions
+        
+        else:
+            return outer_state, actions
+        
+    elif state.action == close_action:
+        if item == open_action:
+            return open_state_fn(index, index), actions + [Action(state.start, state.end)]
+        
+        elif item == close_action:
+            return close_state_fn(state.start, index), actions
+        
+        else:
+            return outer_state, actions + [Action(state.start, state.end)]
+    
+    else:
+        if item == open_action:
+            return open_state_fn(index, index), actions
+        
+        else:
+            return outer_state, actions
+
+
+def __action_state_machine(
+    state: Stateful,
+    index: pd.Timedelta,
+    item: Text,
+    actions: Dict[Text, List[Action]],
+    state_machine_fn: Dict[Text, Callable[[Stateful, pd.Timedelta, Text, List[Action]], Tuple[Stateful, List[Action]]]],
+    outer_state: Stateful
+) -> Tuple[Stateful, Dict[Text, List[Action]]]:
+    def evaluate_alternative_states():
+        for group, fn in state_machine_fn.items():
+            alternative_state, _ = fn(state, index, item, actions[group])
+
+            if alternative_state.group != outer_state.group:
+                return alternative_state
+        
+        return outer_state
+
+    next_state, next_actions = None, actions
+
+    if state.group in state_machine_fn:
+        next_state, next_actions[state.group] = state_machine_fn[state.group](state, index, item, actions[state.group])
+    
+    if (next_state is None) or (next_state.group == outer_state.group):
+        next_state = evaluate_alternative_states()
+    
+    return next_state, next_actions
+
+
+def __collect_actions(
+    df: pd.Series,
+    state_machine_fn: Callable[[Stateful, pd.Timedelta, Text, List[Action]], Tuple[Stateful, Dict[Text, List[Action]]]],
+    outer_state: Stateful
+) -> Dict[Text, List[Action]]:
+    return reduce(
+        lambda s, a: state_machine_fn(s[0], a[0], a[1], s[1]),
+        df[df.columns[-1]].items(),
+        (outer_state, defaultdict(list))
+    )[1]
 
 
 def __reindex_by_offset(df: pd.DataFrame, offset: pd.Timedelta):
@@ -113,20 +190,29 @@ def __reindex_by_offset(df: pd.DataFrame, offset: pd.Timedelta):
     return df
 
 
-def __repeated_actions(drill_actions: List[Action], drill: pd.DataFrame, offset: pd.Timedelta) -> pd.DataFrame:
-    def __reduce_fn(t, action):
-        window = __reindex_by_offset(drill.loc[action.start:action.end], t[0])
-        return (window.index[-1], t[1] + [window])
+def __repeat_actions(drill_actions: List[Action], drill: pd.DataFrame, offset: pd.Timedelta) -> pd.DataFrame:
+    def __reduce_fn(s, a):
+        window = __reindex_by_offset(drill.loc[a.start:a.end], s[0])
+        return (window.index[-1], s[1] + [window])
     
     return pd.concat(reduce(__reduce_fn, drill_actions, (offset, []))[1])
 
 
 def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions: int = 3):
-    def __reduce_fn(state, action):
-        activity = adl.loc[state[0]:action.end].assign(ocd=0)
-        repetitions = __repeated_actions([next(drill_actions) for _ in range(num_repetitions)], drill, action.end).assign(ocd=1)
-        window = __reindex_by_offset(pd.concat([activity, repetitions]), state[1])
-        return (action.end + pd.Timedelta('0.01s'), window.index[-1] + pd.Timedelta('0.01s'), state[2] + [window])
+    def __reduce_fn(s, a):
+        activity = adl \
+            .loc[s[0]:a[1].end] \
+            .assign(ocd=0)
+        
+        repetitions = __repeat_actions(
+            [next(drill_actions[a[0]]) for _ in range(num_repetitions)],
+            drill,
+            a[1].end
+        ).assign(ocd=1)
+        
+        window = __reindex_by_offset(pd.concat([activity, repetitions]), s[1])
+
+        return (a[1].end + pd.Timedelta('0.01s'), window.index[-1] + pd.Timedelta('0.01s'), s[2] + [window])
 
     adl_end, repetition_end, windows = reduce(__reduce_fn, adl_actions, (pd.Timedelta('-0.03s'), pd.Timedelta('-0.03s'), []))
     windows.append(__reindex_by_offset(adl.loc[adl_end:].assign(ocd=0), repetition_end))
@@ -134,13 +220,28 @@ def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions: int
     return pd.concat(windows)
 
 
-def __augment(adls: List[pd.DataFrame], drill: pd.DataFrame, num_repetitions: int = 3):
-    adls_action = list(map(__actions, adls))
-    drill_action = __actions(drill)
-
-    assert all(len(x) * num_repetitions < len(drill_action) for x in adls_action)
-
-    drill_action_cycle = cycle(drill_action)
+def augment(
+    adls: List[pd.DataFrame],
+    drill: pd.DataFrame,
+    action_collection_fn: Callable[[pd.DataFrame], Dict[Text, List[Action]]],
+    num_repetitions: int = 3
+):
+    adls_actions =[
+        sorted(
+            [
+                (group, action)
+                for group, actions in action_collection_fn(adl).items()
+                for action in actions
+            ],
+            key=lambda x: x[1].start
+        )
+        for adl in adls
+    ]
+    
+    drill_actions = {
+        group: cycle(actions)
+        for group, actions in action_collection_fn(drill).items()
+    }
 
     return list(
         map(
@@ -148,9 +249,9 @@ def __augment(adls: List[pd.DataFrame], drill: pd.DataFrame, num_repetitions: in
                 x[0],
                 x[1],
                 drill,
-                iter(next(drill_action_cycle) for _ in range(len(x[1]) * num_repetitions)),
+                drill_actions,
                 num_repetitions
             ),
-            zip(adls, adls_action)
+            zip(adls, adls_actions)
         )
     )
