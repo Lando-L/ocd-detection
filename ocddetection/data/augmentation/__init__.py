@@ -1,52 +1,45 @@
 from collections import defaultdict, namedtuple
-import csv
 from itertools import cycle
 from functools import partial, reduce
 from typing import Callable, Dict, List, Set, Text, Tuple
 
-import matplotlib.pylab as plt
-import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-from ocddetection.data import preprocessing
+from ocddetection.data import MID_LEVEL, MID_LEVEL_LABELS, SENSORS, to_dataset
 
 
 Stateful = namedtuple('State', ['group', 'action', 'start', 'end'])
 Action = namedtuple('Action', ['start', 'end'])
 
-TABLE = dict(preprocessing.MID_LEVEL_LABELS)
+TABLE = dict(MID_LEVEL_LABELS)
 
 TRANSITION_FN = Callable[[pd.Timedelta, pd.Timedelta], Stateful]
 
 def __map_fn(t):
-    return tf.gather(t, [0] + preprocessing.SENSORS + [preprocessing.MID_LEVEL])
+    return tf.gather(t, [0] + SENSORS + [MID_LEVEL])
 
 
 def __filter_fn(t):
     return not tf.math.reduce_any(tf.math.is_nan(t))
 
 
-def __dataset(path: Text) -> tf.data.Dataset:
-    return preprocessing.to_dataset([path]).map(__map_fn).filter(__filter_fn)
-
-
-def __dataframe(path: Text) -> pd.DataFrame:
-    df = pd.DataFrame(__dataset(path).as_numpy_iterator())
+def to_dataframe(path: Text) -> pd.DataFrame:
+    df = pd.DataFrame(to_dataset([path]).map(__map_fn).filter(__filter_fn).as_numpy_iterator())
     df[df.columns[-1]] = df[df.columns[-1]].astype('category')
     df[df.columns[-1]].cat.categories = [TABLE[int(cat)] for cat in df[df.columns[-1]].cat.categories]
     
     return df.set_index(pd.to_timedelta(df[0], 'ms')).drop(columns=[0])
 
 
-def __one_state_action_fn(group: Text, action: Text) -> TRANSITION_FN:
+def one_state_action_fn(group: Text, action: Text) -> TRANSITION_FN:
     def state(start: pd.Timedelta, end: pd.Timedelta) -> Stateful:
         return Stateful(group, action, start, end)
 
     return state
 
 
-def __two_state_action_fn(
+def two_state_action_fn(
     group: Text,
     action_open: Text,
     action_close: Text
@@ -63,7 +56,7 @@ def __two_state_action_fn(
     return open_state, null_state, close_state
 
 
-def __one_state_action_state_machine(
+def one_state_action_state_machine(
     state: Stateful,
     index: pd.Timedelta,
     item: Text,
@@ -87,7 +80,7 @@ def __one_state_action_state_machine(
             return outer_state, actions
 
 
-def __two_state_action_state_machine(
+def two_state_action_state_machine(
     state: Stateful,
     index: pd.Timedelta,
     item: Text,
@@ -144,7 +137,7 @@ def __two_state_action_state_machine(
             return outer_state, actions
 
 
-def __action_state_machine(
+def action_state_machine(
     state: Stateful,
     index: pd.Timedelta,
     item: Text,
@@ -172,7 +165,7 @@ def __action_state_machine(
     return next_state, next_actions
 
 
-def __collect_actions(
+def collect_actions(
     df: pd.Series,
     state_machine_fn: Callable[[Stateful, pd.Timedelta, Text, List[Action]], Tuple[Stateful, Dict[Text, List[Action]]]],
     outer_state: Stateful
