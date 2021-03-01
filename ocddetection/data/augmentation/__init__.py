@@ -226,7 +226,7 @@ def augment(
     action_collection_fn: Callable[[pd.DataFrame], Dict[Text, List[Action]]],
     num_repetitions: int = 3
 ):
-    adls_actions =[
+    adls_actions = [
         sorted(
             [
                 (group, action)
