@@ -1,5 +1,4 @@
 import attr
-from collections import OrderedDict
 from functools import partial
 from typing import Callable, List
 
@@ -16,7 +15,8 @@ CLIENT_STATE_FN = Callable[[], client.State]
 CLIENT_UPDATE_FN = Callable[[tf.data.Dataset, client.State, server.Message, List[tf.Variable], tff.learning.Model, tff.learning.Model, tff.learning.Model, tf.keras.optimizers.Optimizer], client.Output]
 SERVER_UPDATE_FN = Callable[[tff.learning.Model, tf.keras.optimizers.Optimizer, server.State, list], server.State]
 TRANSFORMATION_FN = Callable[[server.State], server.Message]
-EVALUATION_FN = Callable[[tf.data.Dataset, client.State, tff.learning.ModelWeights, List[tf.Variable], tff.learning.Model], client.Evaluation]
+VALIDATION_FN = Callable[[tf.data.Dataset, client.State, tff.learning.ModelWeights, tff.learning.Model], client.Validation]
+EVALUATION_FN = Callable[[tf.data.Dataset, client.State, tff.learning.ModelWeights, tff.learning.Model], client.Evaluation]
 
 
 def __initialize_optimizer(
@@ -167,8 +167,7 @@ def iterator(
         outputs = tff.federated_map(update_client_tf, (datasets, client_states, broadcast))
         weights_delta = tff.federated_mean(outputs.weights_delta, weight=outputs.client_weight)
 
-        metrics = OrderedDict()
-        metrics['train'] = model.federated_output_computation(outputs.metrics)
+        metrics = model.federated_output_computation(outputs.metrics)
 
         next_state = tff.federated_map(update_server_tf, (server_state, weights_delta))
 
@@ -183,6 +182,64 @@ def iterator(
     )
 
 
+def __validate_client(
+    dataset: tf.data.Dataset,
+    state: client.State,
+    weights: tff.learning.ModelWeights,
+    coefficient_fn: COEFFICIENT_FN,
+    model_fn: MODEL_FN,
+    validation_fn: VALIDATION_FN
+) -> client.Validation:
+    return validation_fn(
+        dataset,
+        state,
+        weights,
+        coefficient_fn(),
+        model_fn()
+    )
+
+
+def validator(
+    coefficient_fn: COEFFICIENT_FN,
+    model_fn: MODEL_FN,
+    client_state_fn: CLIENT_STATE_FN
+):
+    model = model_fn()
+    client_state = client_state_fn()
+
+    dataset_type = tff.SequenceType(model.input_spec)
+    client_state_type = tff.framework.type_from_tensors(client_state)
+    weights_type = tff.learning.framework.weights_type_from_model(model)
+
+    validate_client_tf = tff.tf_computation(
+        lambda dataset, state, weights: __validate_client(
+            dataset,
+            state,
+            weights,
+            coefficient_fn,
+            model_fn,
+            tf.function(client.validate)
+        ),
+        (dataset_type, client_state_type, weights_type)
+    )
+
+    federated_weights_type = tff.type_at_server(weights_type)
+    federated_dataset_type = tff.type_at_clients(dataset_type)
+    federated_client_state_type = tff.type_at_clients(client_state_type)    
+
+    def validate(weights, datasets, client_states):
+        broadcast = tff.federated_broadcast(weights)
+        outputs = tff.federated_map(validate_client_tf, (datasets, client_states, broadcast))
+        metrics = model.federated_output_computation(outputs.metrics)
+
+        return metrics
+
+    return tff.federated_computation(
+        validate,
+        (federated_weights_type, federated_dataset_type, federated_client_state_type)
+    )
+
+
 def __evaluate_client(
     dataset: tf.data.Dataset,
     state: client.State,
@@ -191,15 +248,12 @@ def __evaluate_client(
     model_fn: MODEL_FN,
     evaluation_fn: EVALUATION_FN
 ) -> client.Evaluation:
-    coefficient = coefficient_fn()
-    model = model_fn()
-
     return evaluation_fn(
         dataset,
         state,
         weights,
-        coefficient,
-        model,
+        coefficient_fn(),
+        model_fn()
     )
 
 
@@ -213,7 +267,7 @@ def evaluator(
 
     dataset_type = tff.SequenceType(model.input_spec)
     client_state_type = tff.framework.type_from_tensors(client_state)
-    weights_type = tff.learning.framework.weights_type_from_model(model)
+    weights_type = tff.framework.type_from_tensors(tff.learning.ModelWeights.from_model(model.base_model))
 
     evaluate_client_tf = tff.tf_computation(
         lambda dataset, state, weights: __evaluate_client(
@@ -234,10 +288,9 @@ def evaluator(
     def evaluate(weights, datasets, client_states):
         broadcast = tff.federated_broadcast(weights)
         outputs = tff.federated_map(evaluate_client_tf, (datasets, client_states, broadcast))
-        metrics = model.federated_output_computation(outputs.metrics)
-        confusion_matrix = outputs.confusion_matrix
+        confusion_matrix = tff.federated_sum(outputs.confusion_matrix)
 
-        return metrics, confusion_matrix
+        return confusion_matrix
 
     return tff.federated_computation(
         evaluate,

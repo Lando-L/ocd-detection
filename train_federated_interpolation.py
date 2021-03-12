@@ -12,7 +12,7 @@ def main() -> None:
     )
 
     stateful.run(
-        'Human Activity Recognition',
+        'OCD Detection',
         'Federated Learning with Interploation',
         interpolation.setup
     )

@@ -12,7 +12,7 @@ def main() -> None:
     )
 
     stateless.run(
-        'Human Activity Recognition',
+        'OCD Detection',
         'Federated Averaging',
         averaging.setup
     )

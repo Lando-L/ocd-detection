@@ -56,6 +56,4 @@ def update(
     )
 
 def to_message(state: State) -> Message:
-    return Message(
-        state.model
-    )
+    return Message(state.model)

@@ -3,7 +3,7 @@ from ocddetection.centralized import learning
 
 def main() -> None:
     learning.run(
-        'Human Activity Recognition',
+        'OCD Detection',
         'Centralized'
     )
 

@@ -42,15 +42,25 @@ class Output(object):
 
 
 @attr.s(eq=False, frozen=True, slots=True)
-class Evaluation(object):
+class Validation(object):
     """
-    Structure for outputs returned from clients during federated evaluation.
+    Structure for outputs returned from clients during federated validation.
     
     Fields:
         - `metrics`: A structure matching `tff.learning.Model.report_local_outputs`, reflecting the results of training on the input dataset.
     """
 
     metrics = attr.ib()
+
+
+@attr.s(eq=False, frozen=True, slots=True)
+class Evaluation(object):
+    """
+    Structure for outputs returned from clients during federated evaluation.
+    
+    Fields:
+        - `confusion_matrix`: Confusion matrix
+    """
     confusion_matrix = attr.ib()
 
 
@@ -180,30 +190,42 @@ def update(
     )
 
 
+def validate(
+    dataset: tf.data.Dataset,
+    state: State,
+    weights: tff.learning.ModelWeights,
+    mixing_coefficient: tf.Variable,
+    model: tff.learning.Model
+) -> Validation:
+    mixing_coefficient.assign(state.mixing_coefficient)
+    __mix_weights(mixing_coefficient, state.model, weights).assign_weights_to(model)
+
+    for batch in dataset:
+        model.forward_pass(batch, training=False)
+
+    return Validation(
+        metrics=model.report_local_outputs(),
+    )
+
+
 def evaluate(
     dataset: tf.data.Dataset,
     state: State,
     weights: tff.learning.ModelWeights,
     mixing_coefficient: tf.Variable,
-    model: tff.learning.Model,
-):
+    model: tff.learning.Model
+) -> Evaluation:
     mixing_coefficient.assign(state.mixing_coefficient)
     __mix_weights(mixing_coefficient, state.model, weights).assign_weights_to(model)
 
-    y = tf.TensorArray(tf.int32, size=0, dynamic_size=True)
-    y_hat = tf.TensorArray(tf.float32, size=0, dynamic_size=True)
-
-    for idx, batch in enumerate(dataset):
+    def __evaluation_fn(state, batch):
         outputs = model.forward_pass(batch, training=False)
-        y = y.write(tf.cast(idx, dtype=tf.int32), batch[1])
-        y_hat = y_hat.write(tf.cast(idx, dtype=tf.int32), outputs.predictions)
-    
-    confusion_matrix = tf.math.confusion_matrix(
-        tf.reshape(y.concat(), (-1,)),
-        tf.reshape(tf.cast(tf.argmax(y_hat.concat(), axis=-1), dtype=tf.int32), (-1,))
-    )
+        
+        y_true = tf.reshape(batch[1], (-1,))
+        y_pred = tf.round(tf.nn.sigmoid(tf.reshape(outputs.predictions, (-1,))))
+
+        return tf.math.confusion_matrix(y_true, y_pred, num_classes=2)
 
     return Evaluation(
-        metrics=model.report_local_outputs(),
-        confusion_matrix=confusion_matrix
+        confusion_matrix=dataset.reduce(tf.zeros((2, 2), dtype=tf.int32), __evaluation_fn)
     )

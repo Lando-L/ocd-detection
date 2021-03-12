@@ -4,7 +4,6 @@ import tensorflow as tf
 def bidirectional(
     window_size: int,
     feature_size: int,
-    output_size: int,
     hidden_size: int,
     dropout_rate: float
 ) -> tf.keras.Model:
@@ -13,7 +12,6 @@ def bidirectional(
 
         tf.keras.layers.Dropout(dropout_rate, name='block_1_dropout'),
         tf.keras.layers.Dense(hidden_size, name='block_1_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0)),
-        # tf.keras.layers.BatchNormalization(name='block_1_batch_normalization'),
         tf.keras.layers.Activation('relu', name='block_1_activation'),
 
         tf.keras.layers.Dropout(dropout_rate, name='block_2_dropout'),
@@ -28,14 +26,13 @@ def bidirectional(
         ),
 
         tf.keras.layers.Dropout(dropout_rate, name='block_3_dropout'),
-        tf.keras.layers.Dense(output_size, name='block_3_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0))
+        tf.keras.layers.Dense(1, name='block_3_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0))
     ])
 
 
 def personalized_bidirectional(
     window_size: int,
     feature_size: int,
-    output_size: int,
     hidden_size: int,
     dropout_rate: float
 ):
@@ -51,7 +48,7 @@ def personalized_bidirectional(
     personalized_lstm = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_size, return_sequences=True, dropout=dropout_rate, kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0)), name='personalized_lstm')(personalized_lstm_dropout)
     
     personalized_output_dropout = tf.keras.layers.Dropout(dropout_rate, name='personalized_dropout')(personalized_lstm)
-    personalized_output_dense = tf.keras.layers.Dense(hidden_size, name='personalized_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0))(personalized_output_dropout)
+    personalized_output_dense = tf.keras.layers.Dense(1, name='personalized_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0))(personalized_output_dropout)
     personalized_model = tf.keras.Model(inputs=personalized_input, outputs=personalized_output_dense)
 
     model = tf.keras.Model(inputs=base_input, outputs=personalized_model(base_bn))

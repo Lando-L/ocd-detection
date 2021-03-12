@@ -13,38 +13,40 @@ def __train_step(
     state: ServerState,
     dataset: FederatedDataset,
     clients_per_round: int,
-    train_fn: Callable[[ServerState, List[tf.data.Dataset]], Tuple[ServerState, Metrics]]
+    training_fn: Callable[[ServerState, List[tf.data.Dataset]], Tuple[ServerState, Metrics]]
 ) -> Tuple[ServerState, Metrics]:
     sampled_clients = common.sample_clients(dataset, clients_per_round)
     sampled_data = [dataset.data[client] for client in sampled_clients]
 
-    return train_fn(state, sampled_data)
+    next_state, metrics = training_fn(state, sampled_data)
+
+    return next_state, metrics
 
 
-def __evaluation_step(
+def __validation_step(
     weights: tff.learning.ModelWeights,
     dataset: FederatedDataset,
-    evaluate_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset]], Metrics]
+    validation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset]], Metrics]
 ) -> Metrics:
     return common.update_test_metrics(
-        evaluate_fn(
+        validation_fn(
             weights,
             [dataset.data[client] for client in dataset.clients]
         )
     )
 
 
-def __step(
+def __fit(
     evaluation_round_rate: int,
     train_step_fn: Callable[[ServerState], Tuple[ServerState, Metrics]],
-    evaluation_step_fn: Callable[[tff.learning.ModelWeights], Metrics]
+    validation_step_fn: Callable[[tff.learning.ModelWeights], Metrics]
 ) -> Callable[[ServerState, int], ServerState]:
     def __reduce_fn(state: ServerState, round_num: int) -> ServerState:
         next_state, metrics = train_step_fn(state)
-        mlflow.log_metrics(metrics['train'], step=round_num)
+        mlflow.log_metrics(metrics, step=round_num)
 
         if round_num % evaluation_round_rate == 0:
-            test_metrics = evaluation_step_fn(next_state.model)
+            test_metrics = validation_step_fn(next_state.model)
             mlflow.log_metrics(test_metrics, step=round_num)
 
         return next_state
@@ -52,17 +54,38 @@ def __step(
     return __reduce_fn
 
 
+def __evaluate(
+    weights: tff.learning.ModelWeights,
+    dataset: FederatedDataset,
+    evaluation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset], List[ClientState]], tf.Tensor]
+) -> None:
+    confusion_matrix = evaluation_fn(
+        weights,
+        [dataset.data[client] for client in dataset.clients]
+    )
+
+    fig, ax = plt.subplots()
+
+    sns.heatmap(confusion_matrix, annot=True, fmt='d', cmap=sns.color_palette("Blues"), ax=ax)
+    
+    ax.set_xlabel('Predicted')
+    ax.set_ylable('Ground Truth')
+
+    mlflow.log_figure(fig, f'confusion_matrix.png')
+    plt.close(fig)
+
+
 def run(
     experiment_name: str,
     run_name: str,
-    setup_fn: Callable[[int, int, float, float], Tuple[Callable, Callable]]
+    setup_fn: Callable[[int, int, float, float], Tuple[Callable, Callable, Callable]]
 ) -> None:
     mlflow.set_experiment(experiment_name)
     args = common.arg_parser().parse_args()
     
-    train, val = common.load_data(args.path, args.epochs, args.window_size, args.batch_size)
+    train, val, _ = common.load_data(args.path, args.epochs, args.window_size, args.batch_size)
 
-    iterator, evaluator = setup_fn(
+    iterator, validator = setup_fn(
         args.window_size,
         args.hidden_size,
         args.dropout_rate,
@@ -76,23 +99,31 @@ def run(
         train_fn=iterator.next
     )
 
-    evaluation_step = partial(
-        __evaluation_step,
+    validation_step = partial(
+        __validation_step,
         dataset=val,
-        evaluate_fn=evaluator
+        validation_fn=validator
     )
 
-    reduce_fn = __step(
+    fitting_fn = __fit(
         args.evaluation_rate,
         train_step,
-        evaluation_step
+        validation_step
+    )
+
+    evaluation_fn = partial(
+        __evaluate,
+        dataset=val,
+        evaluation_fn=evaluator
     )
 
     with mlflow.start_run(run_name=run_name):
         mlflow.log_params(vars(args))
 
         state = reduce(
-            reduce_fn,
+            fitting_fn,
             range(1, args.rounds + 1),
             iterator.initialize()
         )
+
+        evaluation_fn(state.model)

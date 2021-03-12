@@ -1,9 +1,9 @@
 from argparse import ArgumentParser
-from collections import OrderedDict
-from functools import partial
+import os
 from typing import Tuple
 
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 from ocddetection.data import preprocessing
@@ -17,7 +17,7 @@ def arg_parser() -> ArgumentParser:
     parser.add_argument('path', type=str)
 
     # Evaluation
-    parser.add_argument('--evaluation-rate', type=int, default=5)
+    parser.add_argument('--validation-rate', type=int, default=5)
 
     # Hyperparameter
     parser.add_argument('--clients-per-round', type=int, default=3)
@@ -34,50 +34,24 @@ def arg_parser() -> ArgumentParser:
     return parser
 
 
-def load_data(path, epochs, window_size, batch_size) -> Tuple[FederatedDataset, FederatedDataset]:
-    table = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(list(preprocessing.LABEL2IDX.keys()), list(preprocessing.LABEL2IDX.values())),
-        0
+def load_data(path, epochs, window_size, batch_size) -> Tuple[FederatedDataset, FederatedDataset, FederatedDataset]:
+    files = pd.Series(
+        [os.path.join(path, f'S{subject}-ADL{run}-AUGMENTED.csv') for subject in range(1, 5) for run in range(1, 6)],
+        index=pd.MultiIndex.from_product([list(range(1, 5)), list(range(1, 6))]),
+        name='path'
     )
 
-    df_train, df_val, _ = preprocessing.split(
-        preprocessing.files(path),
-        validation=[(1, 1), (2, 1), (3, 1), (4, 1)],
-        test=[]
+    train_files, val_files, test_files = preprocessing.split(
+        files,
+        validation=[(subject, 4) for subject in range(1, 5)],
+        test=[(subject, 5) for subject in range(1, 5)]
     )
 
-    train_clients, train_dict = preprocessing.to_federated(df_train)
-    train = FederatedDataset(
-        train_clients,
-        OrderedDict({
-            idx: dataset \
-                .map(partial(preprocessing.preprocess, sensors=preprocessing.SENSORS, label=preprocessing.MID_LEVEL, table=table)) \
-                .filter(preprocessing.filter_nan) \
-                .window(window_size, shift=window_size // 2) \
-                .flat_map(partial(preprocessing.windows, window_size=window_size)) \
-                .batch(batch_size) \
-                .repeat(epochs)
-            
-            for idx, dataset in train_dict.items()
-        })
-    )
+    train = preprocessing.to_federated(train_files, epochs, window_size, batch_size)
+    val = preprocessing.to_federated(val_files, epochs, window_size, batch_size)
+    test = preprocessing.to_federated(test_files, epochs, window_size, batch_size)
 
-    val_clients, val_dict = preprocessing.to_federated(df_val)
-    val = FederatedDataset(
-        val_clients,
-        OrderedDict({
-            idx: dataset \
-                .map(partial(preprocessing.preprocess, sensors=preprocessing.SENSORS, label=preprocessing.MID_LEVEL, table=table)) \
-                .filter(preprocessing.filter_nan) \
-                .window(window_size, shift=window_size // 2) \
-                .flat_map(partial(preprocessing.windows, window_size=window_size)) \
-                .batch(batch_size)
-            
-            for idx, dataset in val_dict.items()
-        })
-    )
-
-    return train, val
+    return train, val, test
 
 
 def sample_clients(dataset: FederatedDataset, clients_per_round: int) -> np.ndarray:

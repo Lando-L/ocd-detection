@@ -2,6 +2,8 @@ from argparse import ArgumentParser
 from functools import partial
 import os
 
+import tensorflow as tf
+
 from ocddetection import data
 from ocddetection.data import augmentation
 
@@ -12,20 +14,18 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('path', type=str)
     parser.add_argument('output', type=str)
 
-    parser.add_argument('--num-repetitions', type=int, default=4)
+    parser.add_argument('--num-repetitions', type=int, default=3)
 
     return parser
 
 
 def main() -> None:
     args = __arg_parser().parse_args()
-    
-    adl_files, drill_files = data.files(args.path)
 
-    toggle_switch_state_fn = augmentation.one_state_action_fn(
-        'toggle_switch',
-        'Toggle Switch'
-    )
+    # toggle_switch_state_fn = augmentation.one_state_action_fn(
+    #     'toggle_switch',
+    #     'Toggle Switch'
+    # )
 
     fridge_open_state_fn, fridge_null_state_fn, fridge_close_state_fn = augmentation.two_state_action_fn(
         'fridge',
@@ -46,12 +46,12 @@ def main() -> None:
         None
     )
 
-    toggle_switch_state_machine = partial(
-        augmentation.one_state_action_state_machine,
-        state_action='Toggle Switch',
-        state_fn=toggle_switch_state_fn,
-        outer_state=outer_state
-    )
+    # toggle_switch_state_machine = partial(
+    #     augmentation.one_state_action_state_machine,
+    #     state_action='Toggle Switch',
+    #     state_fn=toggle_switch_state_fn,
+    #     outer_state=outer_state
+    # )
 
     fridge_state_machine = partial(
         augmentation.two_state_action_state_machine,
@@ -78,7 +78,7 @@ def main() -> None:
     state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'toggle_switch': toggle_switch_state_machine,
+            # 'toggle_switch': toggle_switch_state_machine,
             'fridge': fridge_state_machine,
             'dishwasher': dishwasher_state_machine
         },
@@ -91,13 +91,13 @@ def main() -> None:
         outer_state=outer_state
     )
     
-    for subject in drill_files.index:
-        drill = augmentation.to_dataframe(drill_files.loc[subject, 'path'])
-        adls = [augmentation.to_dataframe(path) for path in adl_files.loc[subject, 'path'].values]
+    for subject in range(1, 5):
+        drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
+        adls = list(map(augmentation.read_dat, tf.io.gfile.glob(os.path.join(args.path, f'S{subject}-ADL?.dat'))))
         augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions)
 
-        for run, df in zip(adl_files.loc[subject].index, augmented):
-            df.drop(78, axis=1).to_csv(
+        for run, df in enumerate(augmented, start=1):
+            df.drop(data.MID_LEVEL_COLUMN, axis=1).to_csv(
                 os.path.join(args.output, f'S{subject}-ADL{run}-AUGMENTED.csv'),
                 index=False,
                 header=False
@@ -106,7 +106,7 @@ def main() -> None:
             df.to_csv(
                 os.path.join(args.output, f'S{subject}-ADL{run}-META.csv'),
                 index=True,
-                columns=[78, 'ocd'],
+                columns=[data.MID_LEVEL_COLUMN, 'ocd'],
                 header=['activity', 'ocd']
             )
 

@@ -5,34 +5,33 @@ import tensorflow as tf
 import tensorflow_federated as tff
 
 from ocddetection import models
-from ocddetection.data import preprocessing
+from ocddetection.data import SENSORS
 from ocddetection.federated.learning.impl.personalization.layers import client, process, utils
 
 
 def __model_fn(window_size: int, hidden_size: int, dropout_rate: float) -> utils.PersonalizationLayersDecorator:
-        base, personalized, model = models.personalized_bidirectional(
-            window_size,
-            len(preprocessing.SENSORS),
-            len(preprocessing.LABEL2IDX),
-            hidden_size,
-            dropout_rate
+    base, personalized, model = models.personalized_bidirectional(
+        window_size,
+        len(SENSORS),
+        hidden_size,
+        dropout_rate
+    )
+    
+    return utils.PersonalizationLayersDecorator(
+        base,
+        personalized,
+        tff.learning.from_keras_model(
+            model,
+            loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+            input_spec=(
+                tf.TensorSpec((None, window_size, len(SENSORS)), dtype=tf.float32),
+                tf.TensorSpec((None, window_size), dtype=tf.int32)
+            ),
+            metrics=[
+                tf.keras.metrics.BinaryAccuracy(name='accuracy')
+            ]
         )
-        
-        return utils.PersonalizationLayersDecorator(
-            base,
-            personalized,
-            tff.learning.from_keras_model(
-                model,
-                loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-                input_spec=(
-                    tf.TensorSpec((None, window_size, len(preprocessing.SENSORS)), dtype=tf.float32),
-                    tf.TensorSpec((None, window_size), dtype=tf.int32)
-                ),
-                metrics=[
-                    tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')
-                ]
-            )
-        )
+    )
 
 
 def __server_optimizer_fn() -> tf.keras.optimizers.Optimizer:
@@ -44,7 +43,7 @@ def __client_optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer
 
 
 def __client_state_fn(idx: int, weights: tff.learning.ModelWeights):
-        return client.State(tf.constant(idx), weights)
+    return client.State(tf.constant(idx), weights)
 
 
 def setup(
@@ -62,9 +61,23 @@ def setup(
         for i, idx in client_id2idx.items()
     }
 
-    model_fn = partial(__model_fn, window_size=window_size, hidden_size=hidden_size, dropout_rate=dropout_rate)
-    client_state_fn = partial(__client_state_fn, idx=-1, weights=weights)
-    client_optimizer_fn = partial(__client_optimizer_fn, learning_rate=learning_rate)
+    model_fn = partial(
+        __model_fn,
+        window_size=window_size,
+        hidden_size=hidden_size,
+        dropout_rate=dropout_rate
+    )
+
+    client_state_fn = partial(
+        __client_state_fn,
+        idx=-1,
+        weights=weights
+    )
+    
+    client_optimizer_fn = partial(
+        __client_optimizer_fn,
+        learning_rate=learning_rate
+    )
 
     iterator = process.iterator(
         model_fn,
@@ -73,9 +86,14 @@ def setup(
         client_optimizer_fn
     )
 
+    validator = process.validator(
+        model_fn,
+        client_state_fn
+    )
+
     evaluator = process.evaluator(
         model_fn,
         client_state_fn
     )
 
-    return client_states, iterator, evaluator
+    return client_states, iterator, validator, evaluator

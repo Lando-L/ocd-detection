@@ -3,21 +3,7 @@ import attr
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.federated.learning.impl.personalization.layers import server, utils
-
-
-@attr.s(eq=False, frozen=True, slots=True)
-class State(object):
-    """
-    Structure for state on the client.
-    
-    Fields:
-        - `client_index`: The client index integer to map the client state back to the database hosting client states in the driver file..
-        - `model`: A ModelWeights structure, containing Tensors or Variables.
-    """
-
-    client_index = attr.ib()
-    model = attr.ib()
+from ocddetection.federated.learning.impl.averaging import server
 
 
 @attr.s(eq=False, frozen=True, slots=True)
@@ -29,13 +15,11 @@ class Output(object):
         - `weights_delta`: A dictionary of updates to the model's trainable variables.
         - `client_weight`: Weight to be used in a weighted mean when aggregating `weights_delta`
         - `metrics`: A structure matching `tff.learning.Model.report_local_outputs`, reflecting the results of training on the input dataset.
-        - `client_state`: The updated `State`
     """
 
     weights_delta = attr.ib()
     client_weight = attr.ib()
     metrics = attr.ib()
-    client_state = attr.ib()
 
 
 @attr.s(eq=False, frozen=True, slots=True)
@@ -62,13 +46,11 @@ class Evaluation(object):
 
 def update(
     dataset: tf.data.Dataset,
-    state: State,
     message: server.Message,
-    model: utils.PersonalizationLayersDecorator,
+    model: tff.learning.Model,
     optimizer: tf.keras.optimizers.Optimizer
 ) -> Output:
-    message.model.assign_weights_to(model.base_model)
-    state.model.assign_weights_to(model.personalized_model)
+    message.model.assign_weights_to(model)
     client_weight = tf.constant(0, dtype=tf.int32)
 
     for batch in dataset:
@@ -86,29 +68,23 @@ def update(
 
     weights_delta = tf.nest.map_structure(
         lambda a, b: a - b,
-        model.base_model.trainable_variables,
-        message.model.trainable
+        model.trainable_variables,
+        message.model.trainable_variables
     )
     
     return Output(
         weights_delta=weights_delta,
         client_weight=tf.cast(client_weight, dtype=tf.float32),
-        metrics=model.report_local_outputs(),
-        client_state=State(
-            client_index=state.client_index,
-            model=tff.learning.ModelWeights.from_model(model.personalized_model)
-        )
+        metrics=model.report_local_outputs()
     )
 
 
 def validate(
     dataset: tf.data.Dataset,
-    state: State,
     weights: tff.learning.ModelWeights,
-    model: utils.PersonalizationLayersDecorator
+    model: tff.learning.Model
 ) -> Validation:
-    weights.assign_weights_to(model.base_model)
-    state.model.assign_weights_to(model.personalized_model)
+    weights.assign_weights_to(model)
 
     for batch in dataset:
         model.forward_pass(batch, training=False)
@@ -120,12 +96,10 @@ def validate(
 
 def evaluate(
     dataset: tf.data.Dataset,
-    state: State,
     weights: tff.learning.ModelWeights,
-    model: utils.PersonalizationLayersDecorator
+    model: tff.learning.Model
 ) -> Evaluation:
-    weights.assign_weights_to(model.base_model)
-    state.model.assign_weights_to(model.personalized_model)
+    weights.assign_weights_to(model)
 
     def __evaluation_fn(state, batch):
         outputs = model.forward_pass(batch, training=False)

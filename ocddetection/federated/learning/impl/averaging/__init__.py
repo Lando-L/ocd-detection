@@ -5,22 +5,22 @@ import tensorflow as tf
 import tensorflow_federated as tff
 
 from ocddetection import models
-from ocddetection.data import preprocessing
-from ocddetection.federated.learning.impl.personalization.interpolation import client, server, process
+from ocddetection.data import SENSORS
+from ocddetection.federated.learning.impl.averaging import client, server, process
 
 
 def __model_fn(window_size: int, hidden_size: int, dropout_rate: float) -> tff.learning.Model:     
     return tff.learning.from_keras_model(
         keras_model=models.bidirectional(
             window_size,
-            len(preprocessing.SENSORS),
+            len(SENSORS),
             len(preprocessing.LABEL2IDX),
             hidden_size,
             dropout_rate
         ),
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         input_spec=(
-            tf.TensorSpec((None, window_size, len(preprocessing.SENSORS)), dtype=tf.float32),
+            tf.TensorSpec((None, window_size, len(SENSORS)), dtype=tf.float32),
             tf.TensorSpec((None, window_size), dtype=tf.int32)
         ),
         metrics=[
@@ -46,14 +46,12 @@ def setup(
     model_fn = partial(__model_fn, window_size=window_size, hidden_size=hidden_size, dropout_rate=dropout_rate)
     client_optimizer_fn = partial(__client_optimizer_fn, learning_rate=learning_rate)
 
-    iterator = tff.learning.build_federated_averaging_process(
+    iterator = process.iterator(
         model_fn,
-        client_optimizer_fn,
-        __server_optimizer_fn
+        __server_optimizer_fn,
+        client_optimizer_fn
     )
 
-    evaluator = tff.learning.build_federated_evaluation(
-        model_fn
-    )
+    validator = process.validator(model_fn)
 
-    return iterator, evaluator
+    return iterator, validator

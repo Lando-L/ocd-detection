@@ -6,30 +6,22 @@ from typing import Callable, Dict, List, Set, Text, Tuple
 import pandas as pd
 import tensorflow as tf
 
-from ocddetection.data import MID_LEVEL, MID_LEVEL_LABELS, SENSORS, to_dataset
+from ocddetection.data import MID_LEVEL_COLUMN, MID_LEVEL_LABELS, SENSORS
 
 
 Stateful = namedtuple('State', ['group', 'action', 'start', 'end'])
 Action = namedtuple('Action', ['start', 'end'])
 
-TABLE = dict(MID_LEVEL_LABELS)
-
 TRANSITION_FN = Callable[[pd.Timedelta, pd.Timedelta], Stateful]
 
-def __map_fn(t):
-    return tf.gather(t, [0] + SENSORS + [MID_LEVEL])
 
-
-def __filter_fn(t):
-    return not tf.math.reduce_any(tf.math.is_nan(t))
-
-
-def to_dataframe(path: Text) -> pd.DataFrame:
-    df = pd.DataFrame(to_dataset([path]).map(__map_fn).filter(__filter_fn).as_numpy_iterator())
-    df[df.columns[-1]] = df[df.columns[-1]].astype('category')
-    df[df.columns[-1]].cat.categories = [TABLE[int(cat)] for cat in df[df.columns[-1]].cat.categories]
+def read_dat(path: Text) -> pd.DataFrame:
+    df = pd.read_csv(path, sep=' ', index_col=0, header=None, usecols=[0] + SENSORS + [MID_LEVEL_COLUMN]).dropna()
+    df = df.set_index(pd.to_timedelta(df.index, 'ms'))
+    df[MID_LEVEL_COLUMN] = df[MID_LEVEL_COLUMN].astype('category')
+    df[MID_LEVEL_COLUMN].cat.categories = [MID_LEVEL_LABELS[int(cat)] for cat in df[MID_LEVEL_COLUMN].cat.categories]
     
-    return df.set_index(pd.to_timedelta(df[0], 'ms')).drop(columns=[0])
+    return df
 
 
 def one_state_action_fn(group: Text, action: Text) -> TRANSITION_FN:
@@ -172,7 +164,7 @@ def collect_actions(
 ) -> Dict[Text, List[Action]]:
     return reduce(
         lambda s, a: state_machine_fn(s[0], a[0], a[1], s[1]),
-        df[df.columns[-1]].items(),
+        df[MID_LEVEL_COLUMN].items(),
         (outer_state, defaultdict(list))
     )[1]
 
