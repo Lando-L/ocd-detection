@@ -1,8 +1,8 @@
-from ocddetection.centralized import learning
+from ocddetection.learning import centralized
 
 
 def main() -> None:
-    learning.run(
+    centralized.run(
         'OCD Detection',
         'Centralized'
     )

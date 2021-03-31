@@ -15,17 +15,19 @@ def arg_parser() -> ArgumentParser:
     
     # Data
     parser.add_argument('path', type=str)
+    parser.add_argument('output', type=str)
 
     # Evaluation
     parser.add_argument('--validation-rate', type=int, default=5)
 
     # Hyperparameter
     parser.add_argument('--clients-per-round', type=int, default=3)
-    parser.add_argument('--learning-rate', type=float, default=.1)
+    parser.add_argument('--learning-rate', type=float, default=.01)
     parser.add_argument('--rounds', type=int, default=50)
-    parser.add_argument('--epochs', type=int, default=5)
+    parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=128)
-    parser.add_argument('--window-size', type=int, default=30)
+    parser.add_argument('--window-size', type=int, default=90)
+    parser.add_argument('--pos-weight', type=float, default=2.0)
 
     # Model
     parser.add_argument('--hidden-size', type=int, default=64)
@@ -48,8 +50,8 @@ def load_data(path, epochs, window_size, batch_size) -> Tuple[FederatedDataset, 
     )
 
     train = preprocessing.to_federated(train_files, epochs, window_size, batch_size)
-    val = preprocessing.to_federated(val_files, epochs, window_size, batch_size)
-    test = preprocessing.to_federated(test_files, epochs, window_size, batch_size)
+    val = preprocessing.to_federated(val_files, 1, window_size, batch_size)
+    test = preprocessing.to_federated(test_files, 1, window_size, batch_size)
 
     return train, val, test
 

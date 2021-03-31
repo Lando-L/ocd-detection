@@ -1,12 +1,11 @@
 import attr
-from collections import OrderedDict
 from functools import partial
 from typing import Callable
 
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.federated.learning.impl.averaging import client, server
+from ocddetection.learning.federated.stateless.averaging import client, server
 
 
 MODEL_FN = Callable[[], tff.learning.Model]
@@ -220,9 +219,7 @@ def __evaluate_client(
 ) -> client.Evaluation:
     return evaluation_fn(
         dataset,
-        state,
         weights,
-        coefficient,
         model_fn()
     )
 
@@ -246,14 +243,16 @@ def evaluator(model_fn: MODEL_FN):
     federated_weights_type = tff.type_at_server(weights_type)
     federated_dataset_type = tff.type_at_clients(dataset_type)   
 
-    def validate(weights, datasets):
+    def evaluate(weights, datasets):
         broadcast = tff.federated_broadcast(weights)
         outputs = tff.federated_map(evaluate_client_tf, (datasets, broadcast))
+        
         confusion_matrix = tff.federated_sum(outputs.confusion_matrix)
+        metrics = model.federated_output_computation(outputs.metrics)
 
-        return confusion_matrix
+        return confusion_matrix, metrics
 
     return tff.federated_computation(
-        validate,
+        evaluate,
         (federated_weights_type, federated_dataset_type)
     )

@@ -44,7 +44,7 @@ def update(
         tf.nest.map_structure(
             lambda x, v: (-1.0 * x, v),
             tf.nest.flatten(weights_delta),
-            tf.nest.flatten(model.base_model.trainable_variables)
+            tf.nest.flatten(model.trainable_variables)
         )
     )
 

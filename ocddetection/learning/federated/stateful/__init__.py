@@ -88,7 +88,7 @@ def __evaluate(
     sns.heatmap(confusion_matrix, annot=True, fmt='d', cmap=sns.color_palette("Blues"), ax=ax)
     
     ax.set_xlabel('Predicted')
-    ax.set_ylable('Ground Truth')
+    ax.set_ylabel('Ground Truth')
 
     mlflow.log_figure(fig, f'confusion_matrix.png')
     plt.close(fig)

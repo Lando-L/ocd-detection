@@ -1,32 +1,49 @@
+import numpy as np
 import tensorflow as tf
 
 
 def bidirectional(
     window_size: int,
+    batch_size: int,
     feature_size: int,
     hidden_size: int,
-    dropout_rate: float
+    dropout_rate: float,
+    output_bias_initializer: tf.keras.initializers.Initializer = tf.keras.initializers.Zeros()
 ) -> tf.keras.Model:
     return tf.keras.Sequential([
-        tf.keras.layers.Input((window_size, feature_size), name='inputs'),
+        #Input
+        tf.keras.layers.Input((window_size, feature_size), batch_size=batch_size, name='inputs'),
 
-        tf.keras.layers.Dropout(dropout_rate, name='block_1_dropout'),
-        tf.keras.layers.Dense(hidden_size, name='block_1_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0)),
+        # Dense Block
+        # tf.keras.layers.Dropout(dropout_rate, name='block_1_dropout'),
+        # tf.keras.layers.Dense(hidden_size, name='block_1_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0)),
+        # tf.keras.layers.BatchNormalization(name='block_1_bn'),
+        # tf.keras.layers.Activation('relu', name='block_1_activation'),
+
+        tf.keras.layers.Dense(hidden_size, name='block_1_dense'),
         tf.keras.layers.Activation('relu', name='block_1_activation'),
 
-        tf.keras.layers.Dropout(dropout_rate, name='block_2_dropout'),
+        # Bidirectional Recurrent Block
+        # tf.keras.layers.Dropout(dropout_rate, name='block_2_dropout'),
         tf.keras.layers.Bidirectional(
-            tf.keras.layers.GRU(
+            tf.keras.layers.LSTM(
                 hidden_size,
-                return_sequences=True,
-                dropout=dropout_rate,
-                kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0)
+                # return_sequences=True,
+                # dropout=dropout_rate,
+                # kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0),
+                stateful=True
             ),
             name='block_2_bidirectional'
         ),
 
-        tf.keras.layers.Dropout(dropout_rate, name='block_3_dropout'),
-        tf.keras.layers.Dense(1, name='block_3_dense', kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0))
+        # Output Dense Block
+        # tf.keras.layers.Dropout(dropout_rate, name='block_3_dropout'),
+        tf.keras.layers.Dense(
+            1,
+            name='block_3_dense',
+            # kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0),
+            bias_initializer=output_bias_initializer
+        )
     ])
 
 

@@ -3,6 +3,7 @@ import csv
 from itertools import chain
 from typing import List, Text, Tuple
 
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 
@@ -25,23 +26,24 @@ def __read_csv(paths: List[Text]) -> tf.data.Dataset:
 
 
 def __preprocess(ds: tf.data.Dataset, epochs: int, window_size: int, batch_size: int) -> tf.data.Dataset:
-    def map_fn(t: tf.Tensor):
-        X = t[:-1]
-        y = tf.cast(t[-1], tf.int32)
-
-        return X, y
+    def split(t: tf.Tensor):
+        return t[:-1], t[-1]
     
-    def flatmap_fn(X: tf.Tensor, y: tf.Tensor):
+    def flatten(X: tf.data.Dataset, y: tf.data.Dataset):
         X = X.batch(window_size, drop_remainder=True)
         y = y.batch(window_size, drop_remainder=True)
 
         return tf.data.Dataset.zip((X, y))
+    
+    def label(X: tf.Tensor, y: tf.Tensor):
+        return X, tf.expand_dims(tf.round(tf.math.reduce_mean(y)), axis=-1)
 
     return ds \
-        .map(map_fn) \
+        .map(split) \
         .window(window_size, shift=window_size // 2) \
-        .flat_map(flatmap_fn) \
-        .batch(batch_size) \
+        .flat_map(flatten) \
+        .map(label) \
+        .batch(batch_size, drop_remainder=True) \
         .repeat(epochs)
 
 

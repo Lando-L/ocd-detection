@@ -1,8 +1,8 @@
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.federated.learning import stateless
-from ocddetection.federated.learning.impl import averaging
+from ocddetection.learning.federated import stateless
+from ocddetection.learning.federated.stateless import averaging
 
 
 def main() -> None:
