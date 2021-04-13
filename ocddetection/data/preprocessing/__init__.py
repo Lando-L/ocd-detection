@@ -44,7 +44,8 @@ def __preprocess(ds: tf.data.Dataset, epochs: int, window_size: int, batch_size:
         .flat_map(flatten) \
         .map(label) \
         .batch(batch_size, drop_remainder=True) \
-        .repeat(epochs)
+        .repeat(epochs) \
+        .prefetch(tf.data.AUTOTUNE)
 
 
 def split(paths: pd.Series, validation: List[Tuple[int, int]], test: List[Tuple[int, int]]) -> Tuple[pd.Series, pd.Series, pd.Series]:

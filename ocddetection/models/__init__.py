@@ -31,7 +31,7 @@ def bidirectional(
                 # return_sequences=True,
                 # dropout=dropout_rate,
                 # kernel_constraint=tf.keras.constraints.min_max_norm(0.0, 2.0),
-                stateful=True
+                stateful=False
             ),
             name='block_2_bidirectional'
         ),
