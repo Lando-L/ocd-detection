@@ -1,14 +1,16 @@
 from functools import partial, reduce
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Text, Tuple
 
 import matplotlib.pylab as plt
+from matplotlib.lines import Line2D
 import mlflow
+import numpy as np
 import seaborn as sns
 import tensorflow as tf
 import tensorflow_federated as tff
 
 from ocddetection.types import Metrics, ServerState, ClientState, FederatedDataset
-from ocddetection.federated.learning import common
+from ocddetection.learning.federated import common
 
 
 def __train_step(
@@ -52,38 +54,38 @@ def __validation_step(
 
 
 def __fit(
+    state: Tuple[ServerState, Dict[int, ClientState]],
+    round_num: int,
     validation_round_rate: int,
+    checkpoint_manager: tff.simulation.FileCheckpointManager,
     train_step_fn: Callable[[ServerState, Dict[int, ClientState]], Tuple[ServerState, Metrics, Dict[int, ClientState]]],
     validation_step_fn: Callable[[tff.learning.ModelWeights, Dict[int, ClientState]], Metrics]
-) -> Callable[[Tuple[ServerState, Dict[int, ClientState]], int], Tuple[ServerState, Dict[int, ClientState]]]:
-    def __reduce_fn(aggregates: Tuple[ServerState, Dict[int, ClientState]], round_num: int) -> Tuple[ServerState, Dict[int, ClientState]]:
-        state, metrics, client_states = train_step_fn(aggregates[0], aggregates[1])
-        mlflow.log_metrics(metrics, step=round_num)
+) -> ServerState:
+    next_state, metrics, next_client_states = train_step_fn(state[0], state[1])
+    mlflow.log_metrics(metrics, step=round_num)
 
-        if round_num % validation_round_rate == 0:
-            mlflow.log_metrics(
-                validation_step_fn(state.model, client_states),
-                step=round_num
-            )
+    if round_num % validation_round_rate == 0:
+        test_metrics = validation_step_fn(next_state.model, next_client_states)
+        mlflow.log_metrics(test_metrics, step=round_num)
+        checkpoint_manager.save_checkpoint([next_state, next_client_states], round_num)
 
-        return state, client_states
-    
-    return __reduce_fn
+    return next_state, next_client_states
 
 
 def __evaluate(
     weights: tff.learning.ModelWeights,
     client_states: ClientState,
     dataset: FederatedDataset,
-    evaluation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset], List[ClientState]], tf.Tensor]
+    evaluation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset], List[ClientState]], Tuple[tf.Tensor, Dict[Text, tf.Tensor]]]
 ) -> None:
-    confusion_matrix = evaluation_fn(
+    confusion_matrix, metrics = evaluation_fn(
         weights,
         [dataset.data[client] for client in dataset.clients],
         [client_states[client] for client in dataset.clients]
     )
 
-    fig, ax = plt.subplots()
+    # Confusion Matrix
+    fig, ax = plt.subplots(figsize=(16, 8))
 
     sns.heatmap(confusion_matrix, annot=True, fmt='d', cmap=sns.color_palette("Blues"), ax=ax)
     
@@ -93,11 +95,28 @@ def __evaluate(
     mlflow.log_figure(fig, f'confusion_matrix.png')
     plt.close(fig)
 
+    # Precision Recall
+    fig, ax = plt.subplots(figsize=(16, 8))
+
+    thresholds = list(np.linspace(0, 1, 200))
+    sns.lineplot(x=thresholds, y=metrics['precision'], ax=ax, color='blue')
+    sns.lineplot(x=thresholds, y=metrics['recall'], ax=ax, color='skyblue')
+
+    ax.legend(
+        [Line2D([0], [0], color='blue', lw=4), Line2D([0], [0], color='skyblue', lw=4)],
+        ['precision', 'recall']
+    )
+
+    ax.set_xlabel('Threshold')
+
+    mlflow.log_figure(fig, f'precision_recall.png')
+    plt.close(fig)
+
 
 def run(
     experiment_name: str,
     run_name: str,
-    setup_fn: Callable[[int, int, float, float, Dict[int, int]], Tuple[Dict[int, ClientState], Callable, Callable, Callable]]
+    setup_fn: Callable[[int, int, int, float, float, float, Dict[int, int]], Tuple[Dict[int, ClientState], Callable, Callable, Callable]]
 ) -> None:
     mlflow.set_experiment(experiment_name)
 
@@ -105,13 +124,17 @@ def run(
     
     train, val, _ = common.load_data(args.path, args.epochs, args.window_size, args.batch_size)
 
+    checkpoint_manager = tff.simulation.FileCheckpointManager(args.output)
+
     client_idx2id = list(train.clients.union(val.clients))
     client_id2idx = {i: idx for idx, i in enumerate(client_idx2id)}
     client_states, iterator, validator, evaluator = setup_fn(
         args.window_size,
+        args.batch_size,
         args.hidden_size,
         args.dropout_rate,
         args.learning_rate,
+        args.pos_weight,
         client_id2idx
     )
 
@@ -129,10 +152,12 @@ def run(
         validation_fn=validator
     )
 
-    fitting_fn = __fit(
-        args.validation_rate,
-        train_step,
-        validation_step
+    fitting_fn = partial(
+        __fit,
+        validation_round_rate=args.validation_rate,
+        checkpoint_manager=checkpoint_manager,
+        train_step_fn=train_step,
+        validation_step_fn=validation_step
     )
 
     evaluation_fn = partial(

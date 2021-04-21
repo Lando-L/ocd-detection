@@ -5,7 +5,7 @@ from typing import Callable
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.federated.learning.impl.personalization.interpolation import client, server
+from ocddetection.learning.federated.stateful.interpolation import client, server
 
 
 COEFFICIENT_FN = Callable[[], tf.Variable]
@@ -267,7 +267,7 @@ def evaluator(
 
     dataset_type = tff.SequenceType(model.input_spec)
     client_state_type = tff.framework.type_from_tensors(client_state)
-    weights_type = tff.framework.type_from_tensors(tff.learning.ModelWeights.from_model(model.base_model))
+    weights_type = tff.framework.type_from_tensors(tff.learning.ModelWeights.from_model(model))
 
     evaluate_client_tf = tff.tf_computation(
         lambda dataset, state, weights: __evaluate_client(
@@ -288,9 +288,11 @@ def evaluator(
     def evaluate(weights, datasets, client_states):
         broadcast = tff.federated_broadcast(weights)
         outputs = tff.federated_map(evaluate_client_tf, (datasets, client_states, broadcast))
+        
         confusion_matrix = tff.federated_sum(outputs.confusion_matrix)
+        metrics = model.federated_output_computation(outputs.metrics)
 
-        return confusion_matrix
+        return confusion_matrix, metrics
 
     return tff.federated_computation(
         evaluate,

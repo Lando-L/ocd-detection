@@ -43,7 +43,7 @@ def __preprocess(ds: tf.data.Dataset, epochs: int, window_size: int, batch_size:
         .window(window_size, shift=window_size // 2) \
         .flat_map(flatten) \
         .map(label) \
-        .batch(batch_size, drop_remainder=True) \
+        .batch(batch_size) \
         .repeat(epochs) \
         .prefetch(tf.data.AUTOTUNE)
 

@@ -63,6 +63,7 @@ class Evaluation(object):
         - `confusion_matrix`: Confusion matrix
     """
     confusion_matrix = attr.ib()
+    metrics = attr.ib()
 
 
 def __mix_weights(
@@ -218,14 +219,20 @@ def evaluate(
     tff.utils.assign(mixing_coefficients, state.mixing_coefficients)
     __mix_weights(mixing_coefficients, state.model, weights).assign_weights_to(model)
 
-    def __evaluation_fn(state, batch):
+    def evaluation_fn(state, batch):
         outputs = model.forward_pass(batch, training=False)
         
         y_true = tf.reshape(batch[1], (-1,))
         y_pred = tf.round(tf.nn.sigmoid(tf.reshape(outputs.predictions, (-1,))))
 
-        return tf.math.confusion_matrix(y_true, y_pred, num_classes=2)
+        return state + tf.math.confusion_matrix(y_true, y_pred, num_classes=2)
+
+    confusion_matrix = dataset.reduce(
+        tf.zeros((2, 2), dtype=tf.int32),
+        evaluation_fn
+    )
 
     return Evaluation(
-        confusion_matrix=dataset.reduce(tf.zeros((2, 2), dtype=tf.int32), __evaluation_fn)
+        confusion_matrix=confusion_matrix,
+        metrics=model.report_local_outputs()
     )

@@ -58,10 +58,9 @@ def __load_data(path, window_size, batch_size) -> Tuple[tf.data.Dataset, tf.data
   return train, val, test
 
 
-def __model_fn(window_size: int, batch_size: int, hidden_size: int, dropout_rate: float) -> tf.keras.Model:     
+def __model_fn(window_size: int, hidden_size: int, dropout_rate: float) -> tf.keras.Model:     
   return models.bidirectional(
     window_size,
-    batch_size,
     len(SENSORS),
     hidden_size,
     dropout_rate
@@ -152,7 +151,7 @@ def run(experiment_name: str, run_name: str) -> None:
 
   train, val, _ = __load_data(args.path, args.window_size, args.batch_size)
   
-  model = __model_fn(args.window_size, args.batch_size, args.hidden_size, args.dropout_rate)
+  model = __model_fn(args.window_size, args.hidden_size, args.dropout_rate)
   loss_fn = losses.WeightedBinaryCrossEntropy(args.pos_weight)
   optimizer = __optimizer_fn(args.learning_rate)
   

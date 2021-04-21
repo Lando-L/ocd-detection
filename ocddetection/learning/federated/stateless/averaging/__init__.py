@@ -11,7 +11,6 @@ from ocddetection.learning.federated.stateless.averaging import process
 
 def __model_fn(
     window_size: int,
-    batch_size: int,
     hidden_size: int,
     dropout_rate: float,
     pos_weight: float,
@@ -20,7 +19,6 @@ def __model_fn(
     return tff.learning.from_keras_model(
         keras_model=models.bidirectional(
             window_size,
-            batch_size,
             len(data.SENSORS),
             hidden_size,
             dropout_rate
@@ -67,7 +65,6 @@ def setup(
     model_fn = partial(
         __model_fn,
         window_size=window_size,
-        batch_size=batch_size,
         hidden_size=hidden_size,
         dropout_rate=dropout_rate,
         pos_weight=pos_weight,
@@ -77,7 +74,6 @@ def setup(
     eval_model_fn = partial(
         __model_fn,
         window_size=window_size,
-        batch_size=batch_size,
         hidden_size=hidden_size,
         dropout_rate=dropout_rate,
         pos_weight=pos_weight,
