@@ -195,32 +195,37 @@ def main() -> None:
     )
 
     # Subject 4
-    subject_four_state_machine = partial(
-        augmentation.action_state_machine,
-        state_machine_fn={
-            'fridge': fridge_state_machine,
-            'dishwasher': dishwasher_state_machine
-        },
-        outer_state=outer_state
-    )
+    # subject_four_state_machine = partial(
+    #     augmentation.action_state_machine,
+    #     state_machine_fn={
+    #         'fridge': fridge_state_machine,
+    #         'dishwasher': dishwasher_state_machine
+    #     },
+    #     outer_state=outer_state
+    # )
 
-    subject_four_collect_fn = partial(
-        augmentation.collect_actions,
-        state_machine_fn=subject_four_state_machine,
-        outer_state=outer_state
-    )
+    # subject_four_collect_fn = partial(
+    #     augmentation.collect_actions,
+    #     state_machine_fn=subject_four_state_machine,
+    #     outer_state=outer_state
+    # )
 
     collect_fns = [
         subject_one_collect_fn,
         subject_two_collect_fn,
         subject_three_collect_fn,
-        subject_four_collect_fn
+        None
     ]
     
     for subject, collect_fn in enumerate(collect_fns, start=1):
-        drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
         adls = list(map(augmentation.read_dat, tf.io.gfile.glob(os.path.join(args.path, f'S{subject}-ADL?.dat'))))
-        augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions)
+
+        if collect_fn:
+            drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
+            augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions)
+
+        else:
+            augmented = [adl.assign(ocd=0) for adl in adls]
 
         for run, df in enumerate(augmented, start=1):
             df.drop(data.MID_LEVEL_COLUMN, axis=1).to_csv(

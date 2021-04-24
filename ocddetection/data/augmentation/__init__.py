@@ -185,17 +185,21 @@ def __repeat_actions(drill_actions: List[Action], drill: pd.DataFrame, offset: p
 
 def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions: int = 3):
     def __reduce_fn(s, a):
-        activity = adl \
-            .loc[s[0]:a[1].end] \
+        non_ocd = adl \
+            .loc[s[0]:a[1].start] \
             .assign(ocd=0)
         
-        repetitions = __repeat_actions(
+        original_activity = adl \
+            .loc[a[1].start:a[1].end] \
+            .assign(ocd=1)
+        
+        repeated_activities = __repeat_actions(
             [next(drill_actions[a[0]]) for _ in range(num_repetitions)],
             drill,
             a[1].end
         ).assign(ocd=1)
         
-        window = __reindex_by_offset(pd.concat([activity, repetitions]), s[1])
+        window = __reindex_by_offset(pd.concat([non_ocd, original_activity, repeated_activities]), s[1])
 
         return (a[1].end + pd.Timedelta('0.01s'), window.index[-1] + pd.Timedelta('0.01s'), s[2] + [window])
 
