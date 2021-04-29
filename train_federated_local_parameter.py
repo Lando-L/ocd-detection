@@ -1,8 +1,8 @@
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.federated.learning import stateful
-from ocddetection.federated.learning.impl.personalization import layers
+from ocddetection.learning.federated import stateful
+from ocddetection.learning.federated.stateful import layers
 
 
 def main() -> None:

@@ -3,7 +3,7 @@ import attr
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.federated.learning.impl.personalization.layers import server, utils
+from ocddetection.learning.federated.stateful.layers import server, utils
 
 
 @attr.s(eq=False, frozen=True, slots=True)

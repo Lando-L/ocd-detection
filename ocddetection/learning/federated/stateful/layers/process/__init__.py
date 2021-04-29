@@ -5,7 +5,7 @@ from typing import Callable
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.federated.learning.impl.personalization.layers import client, server, utils
+from ocddetection.learning.federated.stateful.layers import client, server, utils
 
 
 MODEL_FN = Callable[[], utils.PersonalizationLayersDecorator]
