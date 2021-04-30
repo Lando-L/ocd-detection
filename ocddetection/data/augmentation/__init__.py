@@ -3,6 +3,7 @@ from itertools import cycle
 from functools import partial, reduce
 from typing import Callable, Dict, List, Set, Text, Tuple
 
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 
@@ -209,10 +210,19 @@ def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions: int
     return pd.concat(windows)
 
 
+def __filter_actions(actions, List[Action], repetition_rate: float, keep_min: int) -> np.ndarray:
+    arr = np.asarray(actions)
+    idx = np.random.uniform(size=len(actions)) < repetition_rate
+    filtered = arr[idx]
+
+    return arr[:keep_min] if len(filtered) < keep_min else filtered
+
+
 def augment(
     adls: List[pd.DataFrame],
     drill: pd.DataFrame,
     action_collection_fn: Callable[[pd.DataFrame], Dict[Text, List[Action]]],
+    repetition_rate: float = .75,
     num_repetitions: int = 3
 ):
     adls_actions = [

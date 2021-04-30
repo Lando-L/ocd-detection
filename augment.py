@@ -14,6 +14,7 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('path', type=str)
     parser.add_argument('output', type=str)
 
+    parser.add_argument('--repetition-rate', type=float, default=.75)
     parser.add_argument('--num-repetitions', type=int, default=3)
 
     return parser
@@ -131,20 +132,6 @@ def main() -> None:
         outer_state=outer_state
     )
 
-
-    # Toggle Switch
-    toggle_switch_state_fn = augmentation.one_state_action_fn(
-        'toggle_switch',
-        'Toggle Switch'
-    )
-
-    toggle_switch_state_machine = partial(
-        augmentation.one_state_action_state_machine,
-        state_action='Toggle Switch',
-        state_fn=toggle_switch_state_fn,
-        outer_state=outer_state
-    )
-
     # Subject 1
     subject_one_state_machine = partial(
         augmentation.action_state_machine,
@@ -182,8 +169,8 @@ def main() -> None:
     subject_three_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'toggle_switch': toggle_switch_state_machine,
-            'dishwasher': dishwasher_state_machine
+            'dishwasher': dishwasher_state_machine,
+            'fridge': fridge_state_machine
         },
         outer_state=outer_state
     )
@@ -193,22 +180,6 @@ def main() -> None:
         state_machine_fn=subject_three_state_machine,
         outer_state=outer_state
     )
-
-    # Subject 4
-    # subject_four_state_machine = partial(
-    #     augmentation.action_state_machine,
-    #     state_machine_fn={
-    #         'fridge': fridge_state_machine,
-    #         'dishwasher': dishwasher_state_machine
-    #     },
-    #     outer_state=outer_state
-    # )
-
-    # subject_four_collect_fn = partial(
-    #     augmentation.collect_actions,
-    #     state_machine_fn=subject_four_state_machine,
-    #     outer_state=outer_state
-    # )
 
     collect_fns = [
         subject_one_collect_fn,
@@ -222,7 +193,7 @@ def main() -> None:
 
         if collect_fn:
             drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
-            augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions)
+            augmented = augmentation.augment(adls, drill, collect_fn, args.repetition_rate, args.num_repetitions)
 
         else:
             augmented = [adl.assign(ocd=0) for adl in adls]
