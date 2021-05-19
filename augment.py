@@ -14,7 +14,6 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('path', type=str)
     parser.add_argument('output', type=str)
 
-    parser.add_argument('--repetition-rate', type=float, default=.75)
     parser.add_argument('--num-repetitions', type=int, default=3)
 
     return parser
@@ -193,7 +192,7 @@ def main() -> None:
 
         if collect_fn:
             drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
-            augmented = augmentation.augment(adls, drill, collect_fn, args.repetition_rate, args.num_repetitions)
+            augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions)
 
         else:
             augmented = [adl.assign(ocd=0) for adl in adls]

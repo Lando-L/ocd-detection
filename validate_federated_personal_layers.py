@@ -4,8 +4,8 @@ import tensorflow as tf
 import tensorflow_federated as tff
 
 from ocddetection.learning.federated import common
-from ocddetection.learning.federated.stateless import training
-from ocddetection.learning.federated.stateless.impl import averaging
+from ocddetection.learning.federated.stateful import validation
+from ocddetection.learning.federated.stateful.impl import layers
 
 
 def __arg_parser() -> ArgumentParser:
@@ -41,10 +41,10 @@ def main() -> None:
         client_tf_devices=tf.config.list_logical_devices('GPU')
     )
 
-    training.run(
-        'OCD Detection',
-        'Federated Averaging',
-        averaging.setup,
+    validation.run(
+        'Crossvalidation',
+        'Federated Personal Layers',
+        layers.setup,
         common.Config(**vars(args))
     )
 

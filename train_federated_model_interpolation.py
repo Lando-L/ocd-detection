@@ -4,8 +4,8 @@ import tensorflow as tf
 import tensorflow_federated as tff
 
 from ocddetection.learning.federated import common
-from ocddetection.learning.federated.stateless import training
-from ocddetection.learning.federated.stateless.impl import averaging
+from ocddetection.learning.federated.stateful import training
+from ocddetection.learning.federated.stateful.impl import interpolation
 
 
 def __arg_parser() -> ArgumentParser:
@@ -43,8 +43,8 @@ def main() -> None:
 
     training.run(
         'OCD Detection',
-        'Federated Averaging',
-        averaging.setup,
+        'Federated Model Interpolation',
+        interpolation.setup,
         common.Config(**vars(args))
     )
 

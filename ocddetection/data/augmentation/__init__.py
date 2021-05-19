@@ -184,7 +184,7 @@ def __repeat_actions(drill_actions: List[Action], drill: pd.DataFrame, offset: p
     return pd.concat(reduce(__reduce_fn, drill_actions, (offset, []))[1])
 
 
-def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions: int = 3):
+def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions):
     def __reduce_fn(s, a):
         non_ocd = adl \
             .loc[s[0]:a[1].start] \
@@ -210,20 +210,11 @@ def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions: int
     return pd.concat(windows)
 
 
-def __filter_actions(actions, List[Action], repetition_rate: float, keep_min: int) -> np.ndarray:
-    arr = np.asarray(actions)
-    idx = np.random.uniform(size=len(actions)) < repetition_rate
-    filtered = arr[idx]
-
-    return arr[:keep_min] if len(filtered) < keep_min else filtered
-
-
 def augment(
     adls: List[pd.DataFrame],
     drill: pd.DataFrame,
     action_collection_fn: Callable[[pd.DataFrame], Dict[Text, List[Action]]],
-    repetition_rate: float = .75,
-    num_repetitions: int = 3
+    num_repetitions: int
 ):
     adls_actions = [
         sorted(
