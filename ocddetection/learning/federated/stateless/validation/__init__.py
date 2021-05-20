@@ -44,7 +44,7 @@ def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
 def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
   thresholds = list(np.linspace(0, 1, 200))
   return [
-    metrics.AUC(from_logits=True, curve='PR', name='pr_auc'),
+    metrics.AUC(from_logits=True, curve='PR', name='auc'),
     metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),
     metrics.Recall(from_logits=True, thresholds=thresholds, name='recall')
   ]
@@ -126,55 +126,50 @@ def run(
 ) -> None:
   mlflow.set_experiment(experiment_name)
 
-  with mlflow.start_run(run_name=run_name):
-    mlflow.log_params(config._asdict())
+  iterator, _, evaluator = setup_fn(
+    config.window_size,
+    config.hidden_size,
+    config.pos_weight,
+    __training_metrics_fn,
+    __validation_metrics_fn,
+    partial(__client_optimizer_fn, learning_rate=config.learning_rate),
+    __server_optimizer_fn
+  )
 
-    client_optimizer_fn = partial(
-      __client_optimizer_fn,
-      learning_rate=config.learning_rate
+  def reduce_fn(
+    state: Tuple[tf.Tensor, List, List, List],
+    data: Tuple[FederatedDataset, FederatedDataset, FederatedDataset]
+  ):
+    train_step = partial(
+      __train_step,
+      dataset=data[0],
+      clients_per_round=config.clients_per_round,
+      training_fn=iterator.next
     )
 
-    def reduce_fn(
-      state: Tuple[tf.Tensor, List, List, List],
-      data: Tuple[FederatedDataset, FederatedDataset, FederatedDataset]
-    ):
-      iterator, _, evaluator = setup_fn(
-        config.window_size,
-        config.hidden_size,
-        config.pos_weight,
-        __training_metrics_fn,
-        __validation_metrics_fn,
-        client_optimizer_fn,
-        __server_optimizer_fn
-      )
+    validation_step = partial(
+      __validation_step,
+      dataset=data[1],
+      validation_fn=evaluator
+    )
 
-      train_step = partial(
-        __train_step,
-        dataset=data[0],
-        clients_per_round=config.clients_per_round,
-        training_fn=iterator.next
-      )
+    server_state = reduce(
+      lambda state, _: train_step(state)[0],
+      range(1, config.rounds + 1),
+      iterator.initialize()
+    )
 
-      validation_step = partial(
-        __validation_step,
-        dataset=data[1],
-        validation_fn=evaluator
-      )
+    confusion_matrix, metrics = validation_step(server_state.model)
 
-      server_state = reduce(
-        lambda state, _: train_step(state)[0],
-        range(1, config.rounds + 1),
-        iterator.initialize()
-      )
+    return (
+      state[0] + confusion_matrix,
+      state[1] + [metrics['auc']],
+      state[2] + [metrics['precision']],
+      state[3] + [metrics['recall']]
+    )
 
-      confusion_matrix, metrics = validation_step(server_state.model)
-
-      return (
-        state[0] + confusion_matrix,
-        state[1] + [metrics['auc']],
-        state[2] + [metrics['precision']],
-        state[3] + [metrics['recall']]
-      )
+  with mlflow.start_run(run_name=run_name):
+    mlflow.log_params(config._asdict())
 
     confusion_matrix, auc, precision, recall = reduce(
       reduce_fn,
@@ -190,6 +185,6 @@ def run(
     __evaluate(
       confusion_matrix,
       np.mean(auc),
-      np.mean(precision, axis=-1),
-      np.mean(recall, axis=-1)
+      np.mean(precision, axis=0),
+      np.mean(recall, axis=0)
     )

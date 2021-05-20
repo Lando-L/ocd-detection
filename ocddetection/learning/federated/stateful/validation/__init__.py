@@ -146,69 +146,64 @@ def __evaluate(
 def run(
   experiment_name: str,
   run_name: str,
-  setup_fn: Callable[[int, int, float, Dict[int, int], Callable, Callable, Callable, Callable], Tuple[Dict[int, ClientState], Callable, Callable, Callable]],
+  setup_fn: Callable[[int, int, float, Callable, Callable, Callable, Callable], Tuple[Callable, Callable, Callable, Callable]],
   config: common.Config
 ) -> None:
   mlflow.set_experiment(experiment_name)
 
-  with mlflow.start_run(run_name=run_name):
-    mlflow.log_params(config._asdict())
+  client_state_fn, iterator, _, evaluator = setup_fn(
+    config.window_size,
+    config.hidden_size,
+    config.pos_weight,
+    __training_metrics_fn,
+    __validation_metrics_fn,
+    partial(__client_optimizer_fn, learning_rate=config.learning_rate),
+    __server_optimizer_fn
+  )
 
-    client_optimizer_fn = partial(
-      __client_optimizer_fn,
-      learning_rate=config.learning_rate
+  def reduce_fn(
+    state: Tuple[tf.Tensor, List, List, List],
+    data: Tuple[FederatedDataset, FederatedDataset, FederatedDataset]
+  ):
+    client_idx2id = list(data[0].clients.union(data[1].clients))
+    client_states = {i: client_state_fn(idx) for idx, i in enumerate(client_idx2id)}
+
+    train_step = partial(
+      __train_step,
+      dataset=data[0],
+      clients_per_round=config.clients_per_round,
+      client_idx2id=client_idx2id,
+      training_fn=iterator.next
     )
 
-    def reduce_fn(
-      state: Tuple[tf.Tensor, List, List, List],
-      data: Tuple[FederatedDataset, FederatedDataset, FederatedDataset]
-    ):
-      client_idx2id = list(data[0].clients.union(data[1].clients))
-      client_id2idx = {i: idx for idx, i in enumerate(client_idx2id)}
-      client_states, iterator, _, evaluator = setup_fn(
-        config.window_size,
-        config.hidden_size,
-        config.pos_weight,
-        client_id2idx,
-        __training_metrics_fn,
-        __validation_metrics_fn,
-        client_optimizer_fn,
-        __server_optimizer_fn
-      )
+    fitting_fn = partial(
+      __fit,
+      train_step_fn=train_step
+    )
 
-      train_step = partial(
-        __train_step,
-        dataset=data[0],
-        clients_per_round=config.clients_per_round,
-        client_idx2id=client_idx2id,
-        training_fn=iterator.next
-      )
+    validation_step = partial(
+      __validation_step,
+      dataset=data[1],
+      validation_fn=evaluator
+    )
 
-      fitting_fn = partial(
-        __fit,
-        train_step_fn=train_step
-      )
+    server_state, client_states = reduce(
+      fitting_fn,
+      range(1, config.rounds + 1),
+      (iterator.initialize(), client_states)
+    )
 
-      validation_step = partial(
-        __validation_step,
-        dataset=data[1],
-        validation_fn=evaluator
-      )
+    confusion_matrix, metrics = validation_step(server_state.model, client_states)
 
-      server_state, client_states = reduce(
-        fitting_fn,
-        range(1, config.rounds + 1),
-        (iterator.initialize(), client_states)
-      )
+    return (
+      state[0] + confusion_matrix,
+      state[1] + [metrics['auc']],
+      state[2] + [metrics['precision']],
+      state[3] + [metrics['recall']]
+    )
 
-      confusion_matrix, metrics = validation_step(server_state.model, client_states)
-
-      return (
-        state[0] + confusion_matrix,
-        state[1] + [metrics['auc']],
-        state[2] + [metrics['precision']],
-        state[3] + [metrics['recall']]
-      )
+  with mlflow.start_run(run_name=run_name):
+    mlflow.log_params(config._asdict())
 
     confusion_matrix, auc, precision, recall = reduce(
       reduce_fn,
@@ -224,6 +219,6 @@ def run(
     __evaluate(
       confusion_matrix,
       np.mean(auc),
-      np.mean(precision, axis=-1),
-      np.mean(recall, axis=-1)
+      np.mean(precision, axis=0),
+      np.mean(recall, axis=0)
     )

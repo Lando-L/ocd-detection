@@ -1,4 +1,5 @@
 from functools import partial
+from ocddetection.types import ClientState
 from typing import Callable, Dict, List, Tuple
 
 import tensorflow as tf
@@ -39,7 +40,6 @@ def setup(
   window_size: int,
 	hidden_size: int,
 	pos_weight: float,
-	client_id2idx: Dict[int, int],
 	training_metrics_fn: Callable[[], List[tf.metrics.Metric]],
 	evaluation_metrics_fn: Callable[[], List[tf.metrics.Metric]],
 	client_optimizer_fn: Callable[[], tf.keras.optimizers.Optimizer],
@@ -69,10 +69,10 @@ def setup(
 		weights=weights
 	)
 
-	client_states = {
-		i: __client_state_fn(idx, weights)
-		for i, idx in client_id2idx.items()
-	}
+	client_states = partial(
+		__client_state_fn,
+		weights=weights
+	)
 
 	iterator = process.iterator(
 		model_fn,
@@ -92,3 +92,4 @@ def setup(
 	)
 
 	return client_states, iterator, validator, evaluator
+	
