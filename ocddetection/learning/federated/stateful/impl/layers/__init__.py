@@ -15,7 +15,7 @@ def __model_fn(
 	pos_weight: float,
 	metrics_fn: Callable[[], List[tf.keras.metrics.Metric]]
 ) -> utils.PersonalizationLayersDecorator:
-	base, personalized, model = models.personalized_bidirectional(window_size, len(data.SENSORS), hidden_size)
+	base, personalized, model = models.personalized_bidirectional(window_size, len(data.SENSORS), hidden_size, pos_weight)
 	
 	return utils.PersonalizationLayersDecorator(
 		base,

@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import partial, reduce
 import os
 from typing import Callable, Dict, Iterable, List, Text, Tuple
@@ -14,6 +15,12 @@ from ocddetection import metrics
 from ocddetection.data import preprocessing
 from ocddetection.types import Metrics, ServerState, FederatedDataset
 from ocddetection.learning.federated import common
+
+
+Config = namedtuple(
+  'Config',
+  ['path', 'output', 'rounds', 'clients_per_round', 'checkpoint_rate', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+)
 
 
 def __load_data(path, epochs, window_size, batch_size) -> Iterable[Tuple[FederatedDataset, FederatedDataset, FederatedDataset]]:
@@ -88,7 +95,7 @@ def __validation_step(
 def __fit(
 	state: ServerState,
 	round_num: int,
-	validation_round_rate: int,
+	checkpoint_rate: int,
 	checkpoint_manager: tff.simulation.FileCheckpointManager,
 	train_step_fn: Callable[[ServerState], Tuple[ServerState, Metrics]],
 	validation_step_fn: Callable[[tff.learning.ModelWeights], Metrics]
@@ -96,7 +103,7 @@ def __fit(
 	next_state, metrics = train_step_fn(state)
 	mlflow.log_metrics(metrics, step=round_num)
 
-	if round_num % validation_round_rate == 0:
+	if round_num % checkpoint_rate == 0:
 		test_metrics = validation_step_fn(next_state.model)
 		mlflow.log_metrics(test_metrics, step=round_num)
 		checkpoint_manager.save_checkpoint(next_state, round_num)
@@ -144,7 +151,7 @@ def run(
 	experiment_name: str,
 	run_name: str,
 	setup_fn: Callable[[int, int, float, Callable, Callable, Callable, Callable], Tuple[Callable, Callable, Callable]],
-	config: common.Config
+	config: Config
 ) -> None:
 	mlflow.set_experiment(experiment_name)
 	
@@ -182,7 +189,7 @@ def run(
 
 	fitting_fn = partial(
 		__fit,
-		validation_round_rate=config.validation_rate,
+		checkpoint_rate=config.checkpoint_rate,
 		checkpoint_manager=checkpoint_manager,
 		train_step_fn=train_step,
 		validation_step_fn=validation_step

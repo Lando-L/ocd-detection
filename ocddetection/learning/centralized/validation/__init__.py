@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import partial, reduce
 import os
 from typing import Iterable, List, Tuple
@@ -11,7 +12,12 @@ import tensorflow as tf
 
 from ocddetection import losses, metrics, models
 from ocddetection.data import preprocessing, SENSORS
-from ocddetection.learning.centralized.common import Config
+
+
+Config = namedtuple(
+  'Config',
+  ['path', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+)
 
 
 def __load_data(path, window_size, batch_size) -> Iterable[Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]]:
@@ -35,8 +41,8 @@ def __load_data(path, window_size, batch_size) -> Iterable[Tuple[tf.data.Dataset
     yield train, val, test
 
 
-def __model_fn(window_size: int, hidden_size: int) -> tf.keras.Model:     
-  return models.bidirectional(window_size, len(SENSORS), hidden_size)
+def __model_fn(window_size: int, hidden_size: int, pos_weight: int) -> tf.keras.Model:     
+  return models.bidirectional(window_size, len(SENSORS), hidden_size, pos_weight)
 
 
 def __metrics_fn() -> List[tf.keras.metrics.Metric]:
@@ -95,7 +101,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     mlflow.log_params(config._asdict())
 
     def reduce_fn(state, data):
-      model = __model_fn(config.window_size, config.hidden_size)
+      model = __model_fn(config.window_size, config.hidden_size, config.pos_weight)
       loss_fn = losses.WeightedBinaryCrossEntropy(config.pos_weight)
       optimizer = __optimizer_fn(config.learning_rate)
 
@@ -157,7 +163,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     # Precision Recall
     fig, ax = plt.subplots(figsize=(16, 8))
 
-    sns.lineplot(x=np.mean(recall, axis=-1), y=np.mean(precision, axis=-1), ax=ax)
+    sns.lineplot(x=np.mean(recall, axis=0), y=np.mean(precision, axis=0), ax=ax)
 
     ax.set_xlabel('Recall')
     ax.set_xlim(0., 1.)

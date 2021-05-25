@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from ocddetection.learning.centralized import common, training
+from ocddetection.learning.centralized import training
 
 
 def __arg_parser() -> ArgumentParser:
@@ -10,12 +10,12 @@ def __arg_parser() -> ArgumentParser:
   parser.add_argument('output', type=str)
 
   # Hyperparameter
+  parser.add_argument('--checkpoint-rate', type=float, default=5)
   parser.add_argument('--learning-rate', type=float, default=.001)
   parser.add_argument('--epochs', type=int, default=50)
   parser.add_argument('--batch-size', type=int, default=128)
   parser.add_argument('--window-size', type=int, default=60)
   parser.add_argument('--pos-weight', type=float, default=5.0)
-  parser.add_argument('--checkpoint-rate', type=float, default=5)
 
   # Model
   parser.add_argument('--hidden-size', type=int, default=128)
@@ -29,7 +29,7 @@ def main() -> None:
     training.run(
         'OCD Detection',
         'Centralized',
-        common.Config(**vars(args))
+        training.Config(**vars(args))
     )
 
 

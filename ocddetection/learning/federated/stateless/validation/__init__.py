@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import partial, reduce
 import os
 from typing import Callable, Dict, Iterable, List, Text, Tuple
@@ -14,6 +15,12 @@ from ocddetection import metrics
 from ocddetection.data import preprocessing
 from ocddetection.types import Metrics, ServerState, FederatedDataset
 from ocddetection.learning.federated import common
+
+
+Config = namedtuple(
+  'Config',
+  ['path', 'rounds', 'clients_per_round', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+)
 
 
 def __load_data(path, epochs, window_size, batch_size) -> Iterable[Tuple[FederatedDataset, FederatedDataset, FederatedDataset]]:
@@ -122,7 +129,7 @@ def run(
   experiment_name: str,
   run_name: str,
   setup_fn: Callable[[int, int, float, Callable, Callable, Callable, Callable], Tuple[Callable, Callable, Callable]],
-  config: common.Config
+  config: Config
 ) -> None:
   mlflow.set_experiment(experiment_name)
 

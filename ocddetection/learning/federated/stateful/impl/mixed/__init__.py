@@ -15,7 +15,7 @@ def __model_fn(
 	metrics_fn: Callable[[], List[tf.keras.metrics.Metric]]
 ) -> tff.learning.Model:
 	return tff.learning.from_keras_model(
-		keras_model=models.bidirectional(window_size, len(data.SENSORS), hidden_size),
+		keras_model=models.bidirectional(window_size, len(data.SENSORS), hidden_size, pos_weight),
 		loss=losses.WeightedBinaryCrossEntropy(pos_weight),
 		input_spec=(
 			tf.TensorSpec((None, window_size, len(data.SENSORS)), dtype=tf.float32),

@@ -1,6 +1,7 @@
+from collections import namedtuple
 from functools import partial
 import os
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
 
 import matplotlib.pylab as plt
 import mlflow
@@ -11,7 +12,12 @@ import tensorflow as tf
 
 from ocddetection import losses, metrics, models
 from ocddetection.data import preprocessing, SENSORS
-from ocddetection.learning.centralized.common import Config
+
+
+Config = namedtuple(
+  'Config',
+  ['path', 'output', 'checkpoint_rate', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+)
 
 
 def __load_data(path, window_size, batch_size) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
@@ -34,8 +40,8 @@ def __load_data(path, window_size, batch_size) -> Tuple[tf.data.Dataset, tf.data
   return train, val, test
 
 
-def __model_fn(window_size: int, hidden_size: int) -> tf.keras.Model:     
-  return models.bidirectional(window_size, len(SENSORS), hidden_size)
+def __model_fn(window_size: int, hidden_size: int, pos_weight: int) -> tf.keras.Model:     
+  return models.bidirectional(window_size, len(SENSORS), hidden_size, pos_weight)
 
 
 def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
@@ -120,7 +126,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
   mlflow.set_experiment(experiment_name)
   train, val, _ = __load_data(config.path, config.window_size, config.batch_size)
   
-  model = __model_fn(config.window_size, config.hidden_size)
+  model = __model_fn(config.window_size, config.hidden_size, config.pos_weight)
   loss_fn = losses.WeightedBinaryCrossEntropy(config.pos_weight)
   optimizer = __optimizer_fn(config.learning_rate)
   

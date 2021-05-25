@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import partial, reduce
 import os
 from typing import Callable, Dict, Iterable, List, Text, Tuple
@@ -14,6 +15,12 @@ from ocddetection import metrics
 from ocddetection.data import preprocessing
 from ocddetection.types import Metrics, ServerState, ClientState, FederatedDataset
 from ocddetection.learning.federated import common
+
+
+Config = namedtuple(
+  'Config',
+  ['path', 'output', 'rounds', 'clients_per_round', 'checkpoint_rate', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+)
 
 
 def __load_data(path, epochs, window_size, batch_size) -> Iterable[Tuple[FederatedDataset, FederatedDataset, FederatedDataset]]:
@@ -85,13 +92,15 @@ def __train_step(
 
 def __validation_step(
 	weights: tff.learning.ModelWeights,
+	client_states: Dict[int, ClientState],
 	dataset: FederatedDataset,
-	validation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset]], Metrics]
+	validation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset], List[ClientState]], Metrics]
 ) -> Metrics:
 	return common.update_test_metrics(
 		validation_fn(
 			weights,
-			[dataset.data[client] for client in dataset.clients]
+			[dataset.data[client] for client in dataset.clients],
+			[client_states[client] for client in dataset.clients]
 		)
 	)
 
@@ -99,7 +108,7 @@ def __validation_step(
 def __fit(
 	state: Tuple[ServerState, Dict[int, ClientState]],
 	round_num: int,
-	validation_round_rate: int,
+	checkpoint_rate: int,
 	checkpoint_manager: tff.simulation.FileCheckpointManager,
 	train_step_fn: Callable[[ServerState, Dict[int, ClientState]], Tuple[ServerState, Metrics, Dict[int, ClientState]]],
 	validation_step_fn: Callable[[tff.learning.ModelWeights, Dict[int, ClientState]], Metrics]
@@ -107,7 +116,7 @@ def __fit(
 	next_state, metrics, next_client_states = train_step_fn(state[0], state[1])
 	mlflow.log_metrics(metrics, step=round_num)
 
-	if round_num % validation_round_rate == 0:
+	if round_num % checkpoint_rate == 0:
 		test_metrics = validation_step_fn(next_state.model, next_client_states)
 		mlflow.log_metrics(test_metrics, step=round_num)
 		checkpoint_manager.save_checkpoint([next_state, next_client_states], round_num)
@@ -157,31 +166,26 @@ def run(
 	experiment_name: str,
 	run_name: str,
 	setup_fn: Callable[[int, int, float, Dict[int, int], Callable, Callable, Callable, Callable], Tuple[Dict[int, ClientState], Callable, Callable, Callable]],
-	config: common.Config
+	config: Config
 ) -> None:
 	mlflow.set_experiment(experiment_name)
+
+	client_state_fn, iterator, validator, evaluator = setup_fn(
+    config.window_size,
+    config.hidden_size,
+    config.pos_weight,
+    __training_metrics_fn,
+    __validation_metrics_fn,
+    partial(__client_optimizer_fn, learning_rate=config.learning_rate),
+    __server_optimizer_fn
+	)
 	
 	train, val, _ = __load_data(config.path, config.epochs, config.window_size, config.batch_size)
 
 	checkpoint_manager = tff.simulation.FileCheckpointManager(config.output)
 
-	client_optimizer_fn = partial(
-		__client_optimizer_fn,
-		learning_rate=config.learning_rate
-	)
-
 	client_idx2id = list(train.clients.union(val.clients))
-	client_id2idx = {i: idx for idx, i in enumerate(client_idx2id)}
-	client_states, iterator, validator, evaluator = setup_fn(
-    config.window_size,
-    config.hidden_size,
-    config.pos_weight,
-    client_id2idx,
-    __training_metrics_fn,
-    __validation_metrics_fn,
-    client_optimizer_fn,
-    __server_optimizer_fn
-	)
+	client_states = {i: client_state_fn(idx) for idx, i in enumerate(client_idx2id)}
 
 	train_step = partial(
 		__train_step,
@@ -199,7 +203,7 @@ def run(
 
 	fitting_fn = partial(
 		__fit,
-		validation_round_rate=config.validation_rate,
+		checkpoint_rate=config.checkpoint_rate,
 		checkpoint_manager=checkpoint_manager,
 		train_step_fn=train_step,
 		validation_step_fn=validation_step
