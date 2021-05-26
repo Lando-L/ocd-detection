@@ -30,7 +30,7 @@ def personalized_bidirectional(window_size: int, feature_size: int, hidden_size:
 	base_block_2_bidirectional = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_size), name='block_2_bidirectional')(base_block_1_bidirectional)
 	base_model = tf.keras.Model(inputs=base_input, outputs=base_block_2_bidirectional)
 
-	personalized_input = tf.keras.layers.Input((window_size, hidden_size), name='personalized_inputs')
+	personalized_input = tf.keras.layers.Input((2 * hidden_size), name='personalized_inputs')
 	personalized_dense = tf.keras.layers.Dense(1, name='personalized_dense', bias_initializer=tf.keras.initializers.Constant(np.log(1 / pos_weight)))(personalized_input)
 	personalized_model = tf.keras.Model(inputs=personalized_input, outputs=personalized_dense)
 
