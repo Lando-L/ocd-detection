@@ -191,7 +191,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     confusion_matrix = val.reduce(eval_state, eval_step)
 
     # Confusion matrix
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(16, 8))
 
     sns.heatmap(confusion_matrix, annot=True, fmt='d', cmap=sns.color_palette("Blues"), ax=ax)
     

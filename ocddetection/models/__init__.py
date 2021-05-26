@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 
 
@@ -18,7 +19,7 @@ def bidirectional(window_size: int, feature_size: int, hidden_size: int, pos_wei
 		tf.keras.layers.Dense(
 			1,
 			name='block_3_dense',
-			bias_initializer=tf.keras.initializers.Constant(1 / pos_weight)
+			bias_initializer=tf.keras.initializers.Constant(np.log(1 / pos_weight))
 		)
 	])
 
@@ -30,7 +31,7 @@ def personalized_bidirectional(window_size: int, feature_size: int, hidden_size:
 	base_model = tf.keras.Model(inputs=base_input, outputs=base_block_2_bidirectional)
 
 	personalized_input = tf.keras.layers.Input((window_size, hidden_size), name='personalized_inputs')
-	personalized_dense = tf.keras.layers.Dense(1, name='personalized_dense', bias_initializer=tf.keras.initializers.Constant(1 / pos_weight))(personalized_input)
+	personalized_dense = tf.keras.layers.Dense(1, name='personalized_dense', bias_initializer=tf.keras.initializers.Constant(np.log(1 / pos_weight)))(personalized_input)
 	personalized_model = tf.keras.Model(inputs=personalized_input, outputs=personalized_dense)
 
 	model = tf.keras.Model(inputs=base_input, outputs=personalized_model(base_block_2_bidirectional))
