@@ -154,7 +154,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     ax.set_xlabel('Predicted')
     ax.set_ylabel('Ground Truth')
 
-    mlflow.log_figure(fig, f'confusion_matrix.png')
+    mlflow.log_figure(fig, 'confusion_matrix.png')
     plt.close(fig)
 
     # AUC
@@ -171,5 +171,5 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     ax.set_ylabel('Precision')
     ax.set_ylim(0., 1.)
 
-    mlflow.log_figure(fig, f'precision_recall.png')
+    mlflow.log_figure(fig, 'precision_recall.png')
     plt.close(fig)

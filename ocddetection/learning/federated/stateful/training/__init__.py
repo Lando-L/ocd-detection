@@ -19,7 +19,7 @@ from ocddetection.learning.federated import common
 
 Config = namedtuple(
   'Config',
-  ['path', 'output', 'rounds', 'clients_per_round', 'checkpoint_rate', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+  ['path', 'output', 'rounds', 'clients_per_round', 'checkpoint_rate', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size', 'dropout']
 )
 
 
@@ -58,7 +58,7 @@ def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
 
 
 def __client_optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.SGD(learning_rate, momentum=.9)
+  return tf.keras.optimizers.Adam(learning_rate)
 
 
 def __server_optimizer_fn() -> tf.keras.optimizers.Optimizer:
@@ -173,6 +173,7 @@ def run(
 	client_state_fn, iterator, validator, evaluator = setup_fn(
     config.window_size,
     config.hidden_size,
+		config.dropout,
     config.pos_weight,
     __training_metrics_fn,
     __validation_metrics_fn,

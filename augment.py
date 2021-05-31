@@ -15,6 +15,8 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('output', type=str)
 
     parser.add_argument('--num-repetitions', type=int, default=3)
+    parser.add_argument('--include-original', dest='include_original', action='store_const', const=True, default=True)
+    parser.add_argument('--exclude-original', dest='include_original', action='store_const', const=False, default=True)
 
     return parser
 
@@ -31,104 +33,48 @@ def main() -> None:
     )
 
     # Clean Table
-    clean_table_state_fn = augmentation.one_state_action_fn(
+    clean_table_state_machine = augmentation.one_state_action_state_machine_fn(
         'clean_table',
-        'Clean Table'
-    )
-
-    clean_table_state_machine = partial(
-        augmentation.one_state_action_state_machine,
-        state_action='Clean Table',
-        state_fn=clean_table_state_fn,
-        outer_state=outer_state
+        'Clean Table',
+        outer_state
     )
 
     # Drawers
-    drawer_one_open_state_fn, drawer_one_null_state_fn, drawer_one_close_state_fn = augmentation.two_state_action_fn(
+    drawer_one_state_machine = augmentation.two_state_action_state_machine_fn(
         'drawer_one',
         'Open Drawer 1',
-        'Close Drawer 1'
+        'Close Drawer 1',
+        outer_state
     )
 
-    drawer_one_state_machine = partial(
-        augmentation.two_state_action_state_machine,
-        open_action='Open Drawer 1',
-        open_state_fn=drawer_one_open_state_fn,
-        padding_action='Null',
-        padding_state_fn=drawer_one_null_state_fn,
-        close_action='Close Drawer 1',
-        close_state_fn=drawer_one_close_state_fn,
-        outer_state=outer_state
-    )
-
-    drawer_two_open_state_fn, drawer_two_null_state_fn, drawer_two_close_state_fn = augmentation.two_state_action_fn(
+    drawer_two_state_machine = augmentation.two_state_action_state_machine_fn(
         'drawer_two',
         'Open Drawer 2',
-        'Close Drawer 2'
+        'Close Drawer 2',
+        outer_state
     )
 
-    drawer_two_state_machine = partial(
-        augmentation.two_state_action_state_machine,
-        open_action='Open Drawer 2',
-        open_state_fn=drawer_two_open_state_fn,
-        padding_action='Null',
-        padding_state_fn=drawer_two_null_state_fn,
-        close_action='Close Drawer 2',
-        close_state_fn=drawer_two_close_state_fn,
-        outer_state=outer_state
-    )
-
-    drawer_three_open_state_fn, drawer_three_null_state_fn, drawer_three_close_state_fn = augmentation.two_state_action_fn(
+    drawer_three_state_machine = augmentation.two_state_action_state_machine_fn(
         'drawer_three',
         'Open Drawer 3',
-        'Close Drawer 3'
-    )
-
-    drawer_three_state_machine = partial(
-        augmentation.two_state_action_state_machine,
-        open_action='Open Drawer 3',
-        open_state_fn=drawer_three_open_state_fn,
-        padding_action='Null',
-        padding_state_fn=drawer_three_null_state_fn,
-        close_action='Close Drawer 3',
-        close_state_fn=drawer_three_close_state_fn,
-        outer_state=outer_state
+        'Close Drawer 3',
+        outer_state
     )
 
     # Dishwasher
-    dishwasher_open_state_fn, dishwasher_null_state_fn, dishwasher_close_state_fn = augmentation.two_state_action_fn(
+    dishwasher_state_machine = augmentation.two_state_action_state_machine_fn(
         'dishwasher',
         'Open Dishwasher',
-        'Close Dishwasher'
-    )
-
-    dishwasher_state_machine = partial(
-        augmentation.two_state_action_state_machine,
-        open_action='Open Dishwasher',
-        open_state_fn=dishwasher_open_state_fn,
-        padding_action='Null',
-        padding_state_fn=dishwasher_null_state_fn,
-        close_action='Close Dishwasher',
-        close_state_fn=dishwasher_close_state_fn,
-        outer_state=outer_state
+        'Close Dishwasher',
+        outer_state
     )
 
     # Fridge
-    fridge_open_state_fn, fridge_null_state_fn, fridge_close_state_fn = augmentation.two_state_action_fn(
+    fridge_state_machine = augmentation.two_state_action_state_machine_fn(
         'fridge',
         'Open Fridge',
-        'Close Fridge'
-    )
-
-    fridge_state_machine = partial(
-        augmentation.two_state_action_state_machine,
-        open_action='Open Fridge',
-        open_state_fn=fridge_open_state_fn,
-        padding_action='Null',
-        padding_state_fn=fridge_null_state_fn,
-        close_action='Close Fridge',
-        close_state_fn=fridge_close_state_fn,
-        outer_state=outer_state
+        'Close Fridge',
+        outer_state
     )
 
     # Subject 1
@@ -192,7 +138,7 @@ def main() -> None:
 
         if collect_fn:
             drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
-            augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions)
+            augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions, args.include_original)
 
         else:
             augmented = [adl.assign(ocd=0) for adl in adls]

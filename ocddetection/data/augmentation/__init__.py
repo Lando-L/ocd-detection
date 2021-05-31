@@ -1,7 +1,7 @@
 from collections import defaultdict, namedtuple
 from itertools import cycle
 from functools import partial, reduce
-from typing import Callable, Dict, List, Set, Text, Tuple
+from typing import Callable, Dict, List, Text, Tuple
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ Stateful = namedtuple('State', ['group', 'action', 'start', 'end'])
 Action = namedtuple('Action', ['start', 'end'])
 
 TRANSITION_FN = Callable[[pd.Timedelta, pd.Timedelta], Stateful]
+STATE_MACHINE_FN = Callable[[Stateful, pd.Timedelta, Text, List[Action]], Tuple[Stateful, List[Action]]]
 
 
 def read_dat(path: Text) -> pd.DataFrame:
@@ -25,14 +26,14 @@ def read_dat(path: Text) -> pd.DataFrame:
     return df
 
 
-def one_state_action_fn(group: Text, action: Text) -> TRANSITION_FN:
+def __one_state_action_fn(group: Text, action: Text) -> TRANSITION_FN:
     def state(start: pd.Timedelta, end: pd.Timedelta) -> Stateful:
         return Stateful(group, action, start, end)
 
     return state
 
 
-def two_state_action_fn(
+def __two_state_action_fn(
     group: Text,
     action_open: Text,
     action_close: Text
@@ -49,7 +50,7 @@ def two_state_action_fn(
     return open_state, null_state, close_state
 
 
-def one_state_action_state_machine(
+def __one_state_action_state_machine(
     state: Stateful,
     index: pd.Timedelta,
     item: Text,
@@ -73,7 +74,7 @@ def one_state_action_state_machine(
             return outer_state, actions
 
 
-def two_state_action_state_machine(
+def __two_state_action_state_machine(
     state: Stateful,
     index: pd.Timedelta,
     item: Text,
@@ -130,12 +131,45 @@ def two_state_action_state_machine(
             return outer_state, actions
 
 
+def one_state_action_state_machine_fn(
+    group: Text,
+    action: Text,
+    outer_state: Stateful
+) -> STATE_MACHINE_FN:  
+    return partial(
+        __one_state_action_state_machine,
+        state_action='Clean Table',
+        state_fn=__one_state_action_fn(group, action),
+        outer_state=outer_state
+    )
+
+
+def two_state_action_state_machine_fn(
+    group: Text,
+    action_open: Text,
+    action_close: Text,
+    outer_state: Stateful
+) -> STATE_MACHINE_FN:
+    one_open_state_fn, null_state_fn, close_state_fn = __two_state_action_fn(group, action_open, action_close)
+
+    return partial(
+        __two_state_action_state_machine,
+        open_action=action_open,
+        open_state_fn=one_open_state_fn,
+        padding_action='Null',
+        padding_state_fn=null_state_fn,
+        close_action=action_close,
+        close_state_fn=close_state_fn,
+        outer_state=outer_state
+    )
+
+
 def action_state_machine(
     state: Stateful,
     index: pd.Timedelta,
     item: Text,
     actions: Dict[Text, List[Action]],
-    state_machine_fn: Dict[Text, Callable[[Stateful, pd.Timedelta, Text, List[Action]], Tuple[Stateful, List[Action]]]],
+    state_machine_fn: Dict[Text, STATE_MACHINE_FN],
     outer_state: Stateful
 ) -> Tuple[Stateful, Dict[Text, List[Action]]]:
     def evaluate_alternative_states():
@@ -184,7 +218,14 @@ def __repeat_actions(drill_actions: List[Action], drill: pd.DataFrame, offset: p
     return pd.concat(reduce(__reduce_fn, drill_actions, (offset, []))[1])
 
 
-def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions):
+def __merge_actions(
+    adl: pd.DataFrame,
+    adl_actions: Dict[Text, List[Action]],
+    drill: pd.DataFrame,
+    drill_actions: Dict[Text, List[Action]],
+    num_repetitions: int,
+    include_original: bool
+):
     def __reduce_fn(s, a):
         non_ocd = adl \
             .loc[s[0]:a[1].start] \
@@ -192,7 +233,7 @@ def __merge_actions(adl, adl_actions, drill, drill_actions, num_repetitions):
         
         original_activity = adl \
             .loc[a[1].start:a[1].end] \
-            .assign(ocd=1)
+            .assign(ocd=(1 if include_original else 0))
         
         repeated_activities = __repeat_actions(
             [next(drill_actions[a[0]]) for _ in range(num_repetitions)],
@@ -214,7 +255,8 @@ def augment(
     adls: List[pd.DataFrame],
     drill: pd.DataFrame,
     action_collection_fn: Callable[[pd.DataFrame], Dict[Text, List[Action]]],
-    num_repetitions: int
+    num_repetitions: int,
+    include_original: bool
 ):
     adls_actions = [
         sorted(
@@ -240,7 +282,8 @@ def augment(
                 x[1],
                 drill,
                 drill_actions,
-                num_repetitions
+                num_repetitions,
+                include_original
             ),
             zip(adls, adls_actions)
         )

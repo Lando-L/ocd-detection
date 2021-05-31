@@ -2,19 +2,25 @@ import numpy as np
 import tensorflow as tf
 
 
-def bidirectional(window_size: int, feature_size: int, hidden_size: int, pos_weight: int) -> tf.keras.Model:
+def bidirectional(window_size: int, feature_size: int, hidden_size: int, dropout: float, pos_weight: float) -> tf.keras.Model:
 	return tf.keras.Sequential([
 		tf.keras.layers.Input((window_size, feature_size), name='inputs'),
+
+		tf.keras.layers.Dropout(dropout),
 
 		tf.keras.layers.Bidirectional(
 			tf.keras.layers.LSTM(hidden_size, return_sequences=True),
 			name='block_1_bidirectional'
 		),
 
+		tf.keras.layers.Dropout(dropout),
+
 		tf.keras.layers.Bidirectional(
 			tf.keras.layers.LSTM(hidden_size),
 			name='block_2_bidirectional'
 		),
+
+		tf.keras.layers.Dropout(dropout),
 
 		tf.keras.layers.Dense(
 			1,
@@ -24,7 +30,7 @@ def bidirectional(window_size: int, feature_size: int, hidden_size: int, pos_wei
 	])
 
 
-def personalized_bidirectional(window_size: int, feature_size: int, hidden_size: int, pos_weight: int) -> tf.keras.Model:
+def personalized_bidirectional(window_size: int, feature_size: int, hidden_size: int, pos_weight: float) -> tf.keras.Model:
 	base_input = tf.keras.layers.Input((window_size, feature_size), name='base_inputs')
 	base_block_1_bidirectional = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_size, return_sequences=True), name='block_1_bidirectional')(base_input)
 	base_block_2_bidirectional = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(hidden_size), name='block_2_bidirectional')(base_block_1_bidirectional)

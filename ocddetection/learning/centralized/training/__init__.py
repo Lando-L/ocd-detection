@@ -198,7 +198,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     ax.set_xlabel('Predicted')
     ax.set_ylabel('Ground Truth')
 
-    mlflow.log_figure(fig, f'confusion_matrix.png')
+    mlflow.log_figure(fig, 'confusion_matrix.png')
     plt.close(fig)
 
     # Precision Recall
@@ -206,7 +206,10 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     sns.lineplot(x=eval_metrics[0].result().numpy(), y=eval_metrics[1].result().numpy(), ax=ax)
 
     ax.set_xlabel('Recall')
-    ax.set_ylabel('Precision')
+    ax.set_xlim(0., 1.)
 
-    mlflow.log_figure(fig, f'precision_recall.png')
+    ax.set_ylabel('Precision')
+    ax.set_ylim(0., 1.)
+
+    mlflow.log_figure(fig, 'precision_recall.png')
     plt.close(fig)
