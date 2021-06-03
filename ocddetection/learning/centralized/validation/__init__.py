@@ -16,7 +16,7 @@ from ocddetection.data import preprocessing, SENSORS
 
 Config = namedtuple(
   'Config',
-  ['path', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+  ['path', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size', 'dropout']
 )
 
 
@@ -41,15 +41,15 @@ def __load_data(path, window_size, batch_size) -> Iterable[Tuple[tf.data.Dataset
     yield train, val, test
 
 
-def __model_fn(window_size: int, hidden_size: int, pos_weight: int) -> tf.keras.Model:     
-  return models.bidirectional(window_size, len(SENSORS), hidden_size, pos_weight)
+def __model_fn(window_size: int, hidden_size: int, dropout: float, pos_weight: int) -> tf.keras.Model:     
+  return models.bidirectional(window_size, len(SENSORS), hidden_size, dropout, pos_weight)
 
 
 def __metrics_fn() -> List[tf.keras.metrics.Metric]:
   thresholds = list(np.linspace(0, 1, 200))
 
   return [
-    metrics.AUC(from_logits=True, curve='PR', name='pr_auc'),
+    metrics.AUC(from_logits=True, curve='PR', name='auc'),
     metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),
     metrics.Recall(from_logits=True, thresholds=thresholds, name='recall')
   ]
@@ -101,7 +101,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     mlflow.log_params(config._asdict())
 
     def reduce_fn(state, data):
-      model = __model_fn(config.window_size, config.hidden_size, config.pos_weight)
+      model = __model_fn(config.window_size, config.hidden_size, dropout.dropout, config.pos_weight)
       loss_fn = losses.WeightedBinaryCrossEntropy(config.pos_weight)
       optimizer = __optimizer_fn(config.learning_rate)
 

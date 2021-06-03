@@ -32,14 +32,14 @@ def __load_data(path, window_size, batch_size) -> FederatedDataset:
 
 
 def __model_fn(window_size: int, hidden_size: int) -> tf.keras.Model:     
-  return models.bidirectional(window_size, len(SENSORS), hidden_size, dropout=0.0, pos_wieght=0.0)
+  return models.bidirectional(window_size, len(SENSORS), hidden_size, dropout=0.0, pos_weight=1.0)
 
 
 def __metrics_fn() -> List[tf.keras.metrics.Metric]:
   thresholds = np.linspace(0, 1, 200)
 
   return [
-    metrics.AUC(from_logits=True, curve='PR', name='pr_auc'),
+    metrics.AUC(from_logits=True, curve='PR', name='auc'),
     metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),
     metrics.Recall(from_logits=True, thresholds=thresholds, name='recall')
   ]
@@ -67,8 +67,8 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
   val = __load_data(config.path, config.window_size, config.batch_size)
   model = __model_fn(config.window_size, config.hidden_size)
 
-  latest = tf.train.latest_checkpoint(config.path)
-  model.load_weights(latest)
+  weights = tf.train.latest_checkpoint(config.path)
+  model.load_weights(weights)
 
   state = tf.zeros((2, 2), dtype=tf.int32)
   metrics = __metrics_fn()

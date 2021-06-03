@@ -11,10 +11,11 @@ from ocddetection.learning.federated.stateful.impl.layers import client, process
 def __model_fn(
 	window_size: int,
 	hidden_size: int,
+	dropout: float,
 	pos_weight: float,
 	metrics_fn: Callable[[], List[tf.keras.metrics.Metric]]
 ) -> utils.PersonalizationLayersDecorator:
-	base, personalized, model = models.personalized_bidirectional(window_size, len(data.SENSORS), hidden_size, pos_weight)
+	base, personalized, model = models.personalized_bidirectional(window_size, len(data.SENSORS), hidden_size, dropout, pos_weight)
 	
 	return utils.PersonalizationLayersDecorator(
 		base,
@@ -38,6 +39,7 @@ def __client_state_fn(idx: int, weights: tff.learning.ModelWeights):
 def setup(
   window_size: int,
 	hidden_size: int,
+	dropout: float,
 	pos_weight: float,
 	training_metrics_fn: Callable[[], List[tf.metrics.Metric]],
 	evaluation_metrics_fn: Callable[[], List[tf.metrics.Metric]],
@@ -48,6 +50,7 @@ def setup(
 		__model_fn,
 		window_size=window_size,
 		hidden_size=hidden_size,
+		dropout=dropout,
 		pos_weight=pos_weight,
 		metrics_fn=training_metrics_fn
 	)
@@ -56,6 +59,7 @@ def setup(
 		__model_fn,
 		window_size=window_size,
 		hidden_size=hidden_size,
+		dropout=dropout,
 		pos_weight=pos_weight,
 		metrics_fn=evaluation_metrics_fn
 	)

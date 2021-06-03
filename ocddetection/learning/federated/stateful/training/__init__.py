@@ -165,7 +165,7 @@ def __evaluate(
 def run(
 	experiment_name: str,
 	run_name: str,
-	setup_fn: Callable[[int, int, float, Dict[int, int], Callable, Callable, Callable, Callable], Tuple[Dict[int, ClientState], Callable, Callable, Callable]],
+	setup_fn: Callable[[int, int, float, float, Dict[int, int], Callable, Callable, Callable, Callable], Tuple[Dict[int, ClientState], Callable, Callable, Callable]],
 	config: Config
 ) -> None:
 	mlflow.set_experiment(experiment_name)

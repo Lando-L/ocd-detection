@@ -19,7 +19,7 @@ from ocddetection.learning.federated import common
 
 Config = namedtuple(
   'Config',
-  ['path', 'rounds', 'clients_per_round', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size']
+  ['path', 'rounds', 'clients_per_round', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size', 'dropout']
 )
 
 
@@ -128,7 +128,7 @@ def __evaluate(
 def run(
   experiment_name: str,
   run_name: str,
-  setup_fn: Callable[[int, int, float, Callable, Callable, Callable, Callable], Tuple[Callable, Callable, Callable]],
+  setup_fn: Callable[[int, int, float, float, Callable, Callable, Callable, Callable], Tuple[Callable, Callable, Callable]],
   config: Config
 ) -> None:
   mlflow.set_experiment(experiment_name)
@@ -136,6 +136,7 @@ def run(
   iterator, _, evaluator = setup_fn(
     config.window_size,
     config.hidden_size,
+    config.dropout,
     config.pos_weight,
     __training_metrics_fn,
     __validation_metrics_fn,

@@ -19,6 +19,7 @@ def __arg_parser() -> ArgumentParser:
 
   # Model
   parser.add_argument('--hidden-size', type=int, default=128)
+  parser.add_argument('--dropout', type=float, default=.2)
 
   return parser
 

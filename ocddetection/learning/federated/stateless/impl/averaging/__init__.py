@@ -11,11 +11,12 @@ from ocddetection.learning.federated.stateless.impl.averaging import process
 def __model_fn(
 	window_size: int,
 	hidden_size: int,
+	dropout: float,
 	pos_weight: float,
 	metrics_fn: Callable[[], List[tf.keras.metrics.Metric]]
 ) -> tff.learning.Model:
 	return tff.learning.from_keras_model(
-		keras_model=models.bidirectional(window_size, len(data.SENSORS), hidden_size, pos_weight),
+		keras_model=models.bidirectional(window_size, len(data.SENSORS), hidden_size, dropout, pos_weight),
 		loss=losses.WeightedBinaryCrossEntropy(pos_weight),
 		input_spec=(
 			tf.TensorSpec((None, window_size, len(data.SENSORS)), dtype=tf.float32),
@@ -28,6 +29,7 @@ def __model_fn(
 def setup(
     window_size: int,
     hidden_size: int,
+		dropout: float,
     pos_weight: float,
     training_metrics_fn: Callable[[], List[tf.metrics.Metric]],
     evaluation_metrics_fn: Callable[[], List[tf.metrics.Metric]],
@@ -38,6 +40,7 @@ def setup(
 		__model_fn,
 		window_size=window_size,
 		hidden_size=hidden_size,
+		dropout=dropout,
 		pos_weight=pos_weight,
 		metrics_fn=training_metrics_fn
 	)
@@ -46,6 +49,7 @@ def setup(
 		__model_fn,
 		window_size=window_size,
 		hidden_size=hidden_size,
+		dropout=dropout,
 		pos_weight=pos_weight,
 		metrics_fn=evaluation_metrics_fn
 	)
