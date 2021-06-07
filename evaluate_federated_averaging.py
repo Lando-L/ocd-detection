@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
-from ocddetection.learning.centralized import evaluation
+from ocddetection.learning.federated.stateless import evaluation
+from ocddetection.learning.federated.stateless.impl import averaging
 
 
 def __arg_parser() -> ArgumentParser:
@@ -24,7 +25,8 @@ def main() -> None:
 
     evaluation.run(
         'Subject Validation',
-        'Centralized',
+        'Federated Averaging',
+        averaging.create,
         evaluation.Config(**vars(args))
     )
 

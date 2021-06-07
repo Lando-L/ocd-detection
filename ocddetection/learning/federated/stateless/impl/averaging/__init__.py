@@ -4,8 +4,8 @@ from typing import Callable, List, Tuple
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection import data, losses, models
-from ocddetection.learning.federated.stateless.impl.averaging import process
+from ocddetection import data, losses, metrics, models
+from ocddetection.learning.federated.stateless.impl.averaging import process, server
 
 
 def __model_fn(
@@ -59,3 +59,24 @@ def setup(
 	evaluator = process.evaluator(eval_model_fn)
 
 	return iterator, validator, evaluator
+
+
+def create(
+	window_size: int,
+	hidden_size: int,
+	optimizer_fn: Callable[[], tf.keras.optimizers.Optimizer],
+	metrics_fn: Callable[[], List[tf.keras.metrics.Metric]]
+) -> Tuple[server.State, Callable[[], tff.learning.Model]]:
+	model_fn = partial(
+		__model_fn,
+		window_size=window_size,
+		hidden_size=hidden_size,
+		dropout=0.0,
+		pos_weight=1.0,
+		metrics_fn=metrics_fn
+	)
+
+	return (
+		process.__initialize_server(model_fn, optimizer_fn),
+		model_fn
+	)

@@ -17,7 +17,7 @@ from ocddetection.types import FederatedDataset
 
 Config = namedtuple(
   'Config',
-  ['path', 'batch_size', 'window_size', 'hidden_size']
+  ['path', 'output', 'batch_size', 'window_size', 'hidden_size']
 )
 
 
@@ -36,7 +36,7 @@ def __model_fn(window_size: int, hidden_size: int) -> tf.keras.Model:
 
 
 def __metrics_fn() -> List[tf.keras.metrics.Metric]:
-  thresholds = np.linspace(0, 1, 200)
+  thresholds = list(np.linspace(0, 1, 200))
 
   return [
     metrics.AUC(from_logits=True, curve='PR', name='auc'),
@@ -67,17 +67,23 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
   val = __load_data(config.path, config.window_size, config.batch_size)
   model = __model_fn(config.window_size, config.hidden_size)
 
-  weights = tf.train.latest_checkpoint(config.path)
-  model.load_weights(weights)
+  ckpt = tf.train.Checkpoint(model=model)
+  ckpt_manager = tf.train.CheckpointManager(ckpt, config.output, max_to_keep=5)
 
-  state = tf.zeros((2, 2), dtype=tf.int32)
+  if ckpt_manager.latest_checkpoint:
+    ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
+
   metrics = __metrics_fn()
   step = partial(__evaluation_step, model=model, metrics=metrics)
+  state = tf.zeros((2, 2), dtype=tf.int32)
 
   with mlflow.start_run(run_name=run_name):
     mlflow.log_params(config._asdict())
 
     for client in val.clients:
+      for metric in metrics:
+        metric.reset_states()
+
       # Evaluation
       confusion_matrix = val.data[client].reduce(state, step)
 
@@ -93,7 +99,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
       plt.close(fig)
 
       # AUC
-      mlflow.log_metric(f'auc_{client}', metrics[0])
+      mlflow.log_metric(f'auc_{client}', metrics[0].result().numpy())
 
       # Precision Recall
       fig, ax = plt.subplots(figsize=(16, 8))
