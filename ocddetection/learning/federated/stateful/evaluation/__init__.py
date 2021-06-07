@@ -13,7 +13,7 @@ import tensorflow_federated as tff
 
 from ocddetection import metrics
 from ocddetection.data import preprocessing
-from ocddetection.types import ServerState, FederatedDataset
+from ocddetection.types import ClientState, ServerState, FederatedDataset
 from ocddetection.learning.federated import common
 
 
@@ -61,14 +61,14 @@ def __evaluation_step(
 def run(
   experiment_name: str,
   run_name: str,
-  setup_fn: Callable[[int, int, Callable, Callable], Tuple[ServerState, Callable]],
+  setup_fn: Callable[[int, int, Callable, Callable], Tuple[List, Callable, Callable]],
   config: Config
 ) -> None:
   mlflow.set_experiment(experiment_name)
   
   val = __load_data(config.path, config.window_size, config.batch_size)
 
-  struct, model_fn = setup_fn(
+  server_state, client_state_fn, model_fn = setup_fn(
     config.window_size,
 		config.hidden_size,
     __optimizer_fn,
@@ -76,14 +76,16 @@ def run(
   )
 
   ckpt_manager = tff.simulation.FileCheckpointManager(config.output)
-  weights = ckpt_manager.load_latest_checkpoint(struct)[0].model
+  ckpt = ckpt_manager.load_latest_checkpoint([server_state, [client_state_fn(-1) for _ in val.clients]])[0]
+
+  weights = ckpt[0].model
+  client_states = dict(zip(val.clients, ckpt[1]))
 
   with mlflow.start_run(run_name=run_name):
     mlflow.log_params(config._asdict())
 
     for client in val.clients:
-      model = model_fn()
-      weights.assign_weights_to(model)
+      model = model_fn(weights, client_states[client])
       metrics = __metrics_fn()
 
       # Evaluation
