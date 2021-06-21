@@ -79,8 +79,8 @@ def __update_client(
         dataset,
         state,
         message,
-        model_fn(),
-        optimizer_fn()
+        model_fn,
+        optimizer_fn
     )
 
 
@@ -184,7 +184,7 @@ def __validate_client(
         dataset,
         state,
         weights,
-        model_fn(),
+        model_fn
     )
 
 
@@ -238,7 +238,7 @@ def __evaluate_client(
         dataset,
         state,
         weights,
-        model_fn(),
+        model_fn
     )
 
 

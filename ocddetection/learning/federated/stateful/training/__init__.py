@@ -50,7 +50,7 @@ def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
 
 
 def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
-  thresholds = list(np.linspace(0, 1, 200))
+  thresholds = list(np.linspace(0, 1, 200, endpoint=False))
   return [
     metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),
     metrics.Recall(from_logits=True, thresholds=thresholds, name='recall')

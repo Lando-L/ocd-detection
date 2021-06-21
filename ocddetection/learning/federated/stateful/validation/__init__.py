@@ -49,7 +49,7 @@ def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
 
 
 def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
-  thresholds = list(np.linspace(0, 1, 200))
+  thresholds = list(np.linspace(0, 1, 200, endpoint=False))
   return [
     metrics.AUC(from_logits=True, curve='PR', name='auc'),
     metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),

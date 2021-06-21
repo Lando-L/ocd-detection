@@ -1,3 +1,4 @@
+from typing import Callable
 import attr
 
 import tensorflow as tf
@@ -121,12 +122,22 @@ def update(
     dataset: tf.data.Dataset,
     state: State,
     message: server.Message,
-    mixing_coefficient: tf.Variable,
-    global_model: tff.learning.Model,
-    local_model: tff.learning.Model,
-    mixed_model: tff.learning.Model,
-    optimizer: tf.keras.optimizers.Optimizer
+    coefficient_fn: Callable,
+    model_fn: Callable,
+    optimizer_fn: Callable
 ) -> Output:
+    with tf.init_scope():
+        mixing_optimizer = optimizer_fn()
+        mixing_coefficient = coefficient_fn()
+        
+        global_optimizer = optimizer_fn()
+        global_model = model_fn()
+        
+        local_optimizer = optimizer_fn()
+        local_model = model_fn()
+
+        mixed_model = model_fn()
+
     mixing_coefficient.assign(state.mixing_coefficient)
     message.model.assign_weights_to(global_model)
     state.model.assign_weights_to(local_model)
@@ -143,27 +154,26 @@ def update(
         client_weight += global_outputs.num_examples
         global_gradients = global_tape.gradient(global_outputs.loss, global_model.trainable_variables)
         mixed_gradients = mixed_tape.gradient(mixed_outputs.loss, mixed_model.trainable_variables)
-        coefficient_gradient = __mixing_gradient(
-            mixed_gradients,
-            local_model.trainable_variables,
-            global_model.trainable_variables
-        )
+        coefficient_gradient = __mixing_gradient(mixed_gradients, local_model.trainable_variables, global_model.trainable_variables)
         
-        optimizer.apply_gradients(
+        # Update global model
+        global_optimizer.apply_gradients(
             zip(
                 global_gradients,
                 global_model.trainable_variables
             )
         )
         
-        optimizer.apply_gradients(
+        # Update local model
+        local_optimizer.apply_gradients(
             zip(
                 mixed_gradients,
                 local_model.trainable_variables
             )
         )
 
-        optimizer.apply_gradients(
+        # Update coefficient 
+        mixing_optimizer.apply_gradients(
             [(coefficient_gradient, mixing_coefficient)]
         )
 
@@ -171,6 +181,12 @@ def update(
         mixing_coefficient.assign(
             tf.clip_by_value(mixing_coefficient, 0, 1)
         )
+
+        __mix_weights(
+            mixing_coefficient,
+            tff.learning.ModelWeights.from_model(local_model),
+            tff.learning.ModelWeights.from_model(global_model)
+        ).assign_weights_to(mixed_model)
 
     weights_delta = tf.nest.map_structure(
         lambda a, b: a - b,
@@ -194,9 +210,13 @@ def validate(
     dataset: tf.data.Dataset,
     state: State,
     weights: tff.learning.ModelWeights,
-    mixing_coefficient: tf.Variable,
-    model: tff.learning.Model
+    coefficient_fn: Callable,
+    model_fn: Callable
 ) -> Validation:
+    with tf.init_scope():
+        mixing_coefficient = coefficient_fn()
+        model = model_fn()
+
     mixing_coefficient.assign(state.mixing_coefficient)
     __mix_weights(mixing_coefficient, state.model, weights).assign_weights_to(model)
 
@@ -212,9 +232,13 @@ def evaluate(
     dataset: tf.data.Dataset,
     state: State,
     weights: tff.learning.ModelWeights,
-    mixing_coefficient: tf.Variable,
-    model: tff.learning.Model
+    coefficient_fn: Callable,
+    model_fn: Callable
 ) -> Evaluation:
+    with tf.init_scope():
+        mixing_coefficient = coefficient_fn()
+        model = model_fn()
+
     mixing_coefficient.assign(state.mixing_coefficient)
     __mix_weights(mixing_coefficient, state.model, weights).assign_weights_to(model)
 

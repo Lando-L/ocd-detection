@@ -36,7 +36,7 @@ def __model_fn(window_size: int, hidden_size: int) -> tf.keras.Model:
 
 
 def __metrics_fn() -> List[tf.keras.metrics.Metric]:
-  thresholds = list(np.linspace(0, 1, 200))
+  thresholds = list(np.linspace(0, 1, 200, endpoint=False))
 
   return [
     metrics.AUC(from_logits=True, curve='PR', name='auc'),

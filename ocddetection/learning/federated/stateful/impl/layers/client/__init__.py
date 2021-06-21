@@ -1,3 +1,4 @@
+from typing import Callable
 import attr
 
 import tensorflow as tf
@@ -65,9 +66,13 @@ def update(
     dataset: tf.data.Dataset,
     state: State,
     message: server.Message,
-    model: utils.PersonalizationLayersDecorator,
-    optimizer: tf.keras.optimizers.Optimizer
+    model_fn: Callable,
+    optimizer_fn: Callable
 ) -> Output:
+    with tf.init_scope():
+        model = model_fn()
+        optimizer = optimizer_fn()
+
     message.model.assign_weights_to(model.base_model)
     state.model.assign_weights_to(model.personalized_model)
     client_weight = tf.constant(0, dtype=tf.int32)
@@ -106,8 +111,11 @@ def validate(
     dataset: tf.data.Dataset,
     state: State,
     weights: tff.learning.ModelWeights,
-    model: utils.PersonalizationLayersDecorator
+    model_fn: Callable
 ) -> Validation:
+    with tf.init_scope():
+        model = model_fn()
+
     weights.assign_weights_to(model.base_model)
     state.model.assign_weights_to(model.personalized_model)
 
@@ -123,8 +131,11 @@ def evaluate(
     dataset: tf.data.Dataset,
     state: State,
     weights: tff.learning.ModelWeights,
-    model: utils.PersonalizationLayersDecorator
+    model_fn: Callable
 ) -> Evaluation:
+    with tf.init_scope():
+        model = model_fn()
+
     weights.assign_weights_to(model.base_model)
     state.model.assign_weights_to(model.personalized_model)
 

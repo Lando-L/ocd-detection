@@ -16,7 +16,7 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('--pos-weight', type=float, default=5.0)
 
     # Model
-    parser.add_argument('--hidden-size', type=int, default=128)
+    parser.add_argument('--hidden-size', type=int, default=64)
 
     return parser
 

@@ -37,9 +37,10 @@ def __initialize_optimizer(
 def __initialize_server(
     model_fn: MODEL_FN,
     optimizer_fn: OPTIMIZER_FN
-):
+) -> server.State:
     model = model_fn()
     optimizer = optimizer_fn()
+        
     __initialize_optimizer(model, optimizer)
 
     return server.State(
@@ -58,6 +59,7 @@ def __update_server(
 ) -> server.State:
     model = model_fn()
     optimizer = optimizer_fn()
+
     __initialize_optimizer(model, optimizer)
 
     return update_fn(
@@ -81,11 +83,9 @@ def __update_client(
         dataset,
         state,
         message,
-        coefficient_fn(),
-        model_fn(),
-        model_fn(),
-        model_fn(),
-        optimizer_fn()
+        coefficient_fn,
+        model_fn,
+        optimizer_fn
     )
 
 
@@ -192,8 +192,8 @@ def __validate_client(
         dataset,
         state,
         weights,
-        coefficient_fn(),
-        model_fn()
+        coefficient_fn,
+        model_fn
     )
 
 
@@ -250,8 +250,8 @@ def __evaluate_client(
         dataset,
         state,
         weights,
-        coefficient_fn(),
-        model_fn()
+        coefficient_fn,
+        model_fn
     )
 
 
@@ -265,7 +265,7 @@ def evaluator(
 
     dataset_type = tff.SequenceType(model.input_spec)
     client_state_type = tff.framework.type_from_tensors(client_state)
-    weights_type = tff.framework.type_from_tensors(tff.learning.ModelWeights.from_model(model.base_model))
+    weights_type = tff.framework.type_from_tensors(tff.learning.ModelWeights.from_model(model))
 
     evaluate_client_tf = tff.tf_computation(
         lambda dataset, state, weights: __evaluate_client(

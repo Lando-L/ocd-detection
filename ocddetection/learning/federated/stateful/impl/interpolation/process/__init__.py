@@ -10,7 +10,7 @@ COEFFICIENT_FN = Callable[[], tf.Variable]
 MODEL_FN = Callable[[], tff.learning.Model]
 OPTIMIZER_FN = Callable[[], tf.keras.optimizers.Optimizer]
 CLIENT_STATE_FN = Callable[[], client.State]
-CLIENT_UPDATE_FN = Callable[[tf.data.Dataset, client.State, server.Message, tf.Variable, tff.learning.Model, tff.learning.Model, tff.learning.Model, tf.keras.optimizers.Optimizer], client.Output]
+CLIENT_UPDATE_FN = Callable[[tf.data.Dataset, client.State, server.Message, Callable, Callable, Callable], client.Output]
 SERVER_UPDATE_FN = Callable[[tff.learning.Model, tf.keras.optimizers.Optimizer, server.State, list], server.State]
 TRANSFORMATION_FN = Callable[[server.State], server.Message]
 VALIDATION_FN = Callable[[tf.data.Dataset, client.State, tff.learning.ModelWeights, tff.learning.Model], client.Validation]
@@ -81,11 +81,9 @@ def __update_client(
         dataset,
         state,
         message,
-        coefficient_fn(),
-        model_fn(),
-        model_fn(),
-        model_fn(),
-        optimizer_fn()
+        coefficient_fn,
+        model_fn,
+        optimizer_fn
     )
 
 
@@ -192,8 +190,8 @@ def __validate_client(
         dataset,
         state,
         weights,
-        coefficient_fn(),
-        model_fn()
+        coefficient_fn,
+        model_fn
     )
 
 
@@ -250,8 +248,8 @@ def __evaluate_client(
         dataset,
         state,
         weights,
-        coefficient_fn(),
-        model_fn()
+        coefficient_fn,
+        model_fn
     )
 
 

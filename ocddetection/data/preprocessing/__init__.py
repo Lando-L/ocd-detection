@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import csv
+from functools import reduce
 from itertools import chain
 from typing import List, Text, Tuple
 
@@ -44,8 +45,7 @@ def __preprocess(ds: tf.data.Dataset, epochs: int, window_size: int, batch_size:
         .flat_map(flatten) \
         .map(label) \
         .batch(batch_size) \
-        .repeat(epochs) \
-        .prefetch(tf.data.AUTOTUNE)
+        .repeat(epochs)
 
 
 def split(paths: pd.Series, validation: List[Tuple[int, int]], test: List[Tuple[int, int]]) -> Tuple[pd.Series, pd.Series, pd.Series]:
@@ -57,12 +57,10 @@ def split(paths: pd.Series, validation: List[Tuple[int, int]], test: List[Tuple[
 
 
 def to_centralised(paths: pd.DataFrame, window_size: int, batch_size: int) -> tf.data.Dataset:
-    return __preprocess(
-        __read_csv(paths.values),
-        1,
-        window_size,
-        batch_size
-    )
+    client_paths = paths.groupby(level=[0]).agg(list).to_dict()
+    client_datasets = [__preprocess(__read_csv(paths), 1, window_size, batch_size) for paths in client_paths.values()]
+
+    return reduce(lambda merged, client: merged.concatenate(client), client_datasets).prefetch(tf.data.AUTOTUNE)
 
 
 def to_federated(paths: pd.DataFrame, epochs: int, window_size: int, batch_size: int) -> FederatedDataset:
@@ -73,7 +71,7 @@ def to_federated(paths: pd.DataFrame, epochs: int, window_size: int, batch_size:
     return FederatedDataset(
         client_ids,
         OrderedDict({
-            client: __preprocess(dataset, epochs, window_size, batch_size)
+            client: __preprocess(dataset, epochs, window_size, batch_size).prefetch(tf.data.AUTOTUNE)
             for client, dataset in client_datasets.items()
         })
     )

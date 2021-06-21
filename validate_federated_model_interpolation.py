@@ -16,15 +16,14 @@ def __arg_parser() -> ArgumentParser:
     # Hyperparameter
     parser.add_argument('--rounds', type=int, default=50)
     parser.add_argument('--clients-per-round', type=int, default=4)
-    parser.add_argument('--learning-rate', type=float, default=.005)
+    parser.add_argument('--learning-rate', type=float, default=.001)
     parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--batch-size', type=int, default=128)
-    parser.add_argument('--window-size', type=int, default=60)
+    parser.add_argument('--window-size', type=int, default=150)
     parser.add_argument('--pos-weight', type=float, default=6.5)
 
     # Model
-    parser.add_argument('--hidden-size', type=int, default=128)
-    parser.add_argument('--dropout', type=float, default=.2)
+    parser.add_argument('--hidden-size', type=int, default=64)
 
     return parser
 
