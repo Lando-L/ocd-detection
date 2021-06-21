@@ -39,25 +39,18 @@ def main() -> None:
         outer_state
     )
 
-    # Drawers
-    drawer_one_state_machine = augmentation.two_state_action_state_machine_fn(
-        'drawer_one',
-        'Open Drawer 1',
-        'Close Drawer 1',
+    # Toggle Switch
+    fridge_state_machine = augmentation.one_state_action_state_machine_fn(
+        'toggle_switch',
+        'Toggle Switch',
         outer_state
     )
 
-    drawer_two_state_machine = augmentation.two_state_action_state_machine_fn(
-        'drawer_two',
-        'Open Drawer 2',
-        'Close Drawer 2',
-        outer_state
-    )
-
-    drawer_three_state_machine = augmentation.two_state_action_state_machine_fn(
-        'drawer_three',
-        'Open Drawer 3',
-        'Close Drawer 3',
+    # Door 1
+    door_one_state_machine = augmentation.two_state_action_state_machine_fn(
+        'door_1',
+        'Open Door 1',
+        'Close Coor 1',
         outer_state
     )
 
