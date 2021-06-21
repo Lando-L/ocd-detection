@@ -40,7 +40,7 @@ def main() -> None:
     )
 
     # Toggle Switch
-    fridge_state_machine = augmentation.one_state_action_state_machine_fn(
+    switch_state_machine = augmentation.one_state_action_state_machine_fn(
         'toggle_switch',
         'Toggle Switch',
         outer_state
@@ -70,13 +70,15 @@ def main() -> None:
         outer_state
     )
 
-    # Subject 1
+    # --- Subject 1 ---
+    # toggle switch, clean table, open/close fridge
+    # magic number: 4
     subject_one_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'drawer_one': drawer_one_state_machine,
-            'drawer_two': drawer_two_state_machine,
-            'drawer_three': drawer_three_state_machine
+            'toggle_switch': switch_state_machine,
+            'clean_table': clean_table_state_machine,
+            'fridge': fridge_state_machine
         },
         outer_state=outer_state
     )
@@ -87,12 +89,16 @@ def main() -> None:
         outer_state=outer_state
     )
 
-    # Subject 2
+    # --- Subject 2 ---
+    # repeat open/close door 1 (and NOT door 2)
+    # further compulsions: open/close fridge, open/close dishwasher
+    # magic number: 3
     subject_two_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'clean_table': clean_table_state_machine,
-            'fridge': fridge_state_machine
+            'door_1': door_one_state_machine,
+            'fridge': fridge_state_machine,
+            'dishwasher': dishwasher_state_machine
         },
         outer_state=outer_state
     )
@@ -103,10 +109,17 @@ def main() -> None:
         outer_state=outer_state
     )
 
-    # Subject 3
+    # --- Subject 3 ---
+    # different magic numbers for compulsions
+    # toggle switch: 5
+    # clean table: 4
+    # open / close dishwasher: 3
+    # open / close fridge: 3
     subject_three_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
+            'toggle_switch': switch_state_machine,
+            'clean_table': clean_table_state_machine,
             'dishwasher': dishwasher_state_machine,
             'fridge': fridge_state_machine
         },
@@ -118,6 +131,8 @@ def main() -> None:
         state_machine_fn=subject_three_state_machine,
         outer_state=outer_state
     )
+
+    # Subject 4 - healthy, no OCD behavior
 
     collect_fns = [
         subject_one_collect_fn,
