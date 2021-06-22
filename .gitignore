@@ -150,6 +150,8 @@ mlruns
 # Data
 /data
 /models
+/output
 
 # Pycharm
 .idea/
+
