@@ -14,7 +14,6 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('path', type=str)
     parser.add_argument('output', type=str)
 
-    parser.add_argument('--num-repetitions', type=int, default=3)
     parser.add_argument('--include-original', dest='include_original', action='store_const', const=True, default=True)
     parser.add_argument('--exclude-original', dest='include_original', action='store_const', const=False, default=True)
 
@@ -76,9 +75,9 @@ def main() -> None:
     subject_one_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'toggle_switch': switch_state_machine,
-            'clean_table': clean_table_state_machine,
-            'fridge': fridge_state_machine
+            'toggle_switch': (switch_state_machine, 4),
+            'clean_table': (clean_table_state_machine, 4),
+            'fridge': (fridge_state_machine, 4)
         },
         outer_state=outer_state
     )
@@ -96,9 +95,9 @@ def main() -> None:
     subject_two_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'door_1': door_one_state_machine,
-            'fridge': fridge_state_machine,
-            'dishwasher': dishwasher_state_machine
+            'door_1': (door_one_state_machine, 3),
+            'fridge': (fridge_state_machine, 3),
+            'dishwasher': (dishwasher_state_machine, 3)
         },
         outer_state=outer_state
     )
@@ -118,10 +117,10 @@ def main() -> None:
     subject_three_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'toggle_switch': switch_state_machine,
-            'clean_table': clean_table_state_machine,
-            'dishwasher': dishwasher_state_machine,
-            'fridge': fridge_state_machine
+            'toggle_switch': (switch_state_machine, 5),
+            'clean_table': (clean_table_state_machine, 4),
+            'dishwasher': (dishwasher_state_machine, 3),
+            'fridge': (fridge_state_machine, 3)
         },
         outer_state=outer_state
     )
@@ -146,7 +145,7 @@ def main() -> None:
 
         if collect_fn:
             drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
-            augmented = augmentation.augment(adls, drill, collect_fn, args.num_repetitions, args.include_original)
+            augmented = augmentation.augment(adls, drill, collect_fn, args.include_original)
 
         else:
             augmented = [adl.assign(ocd=0) for adl in adls]

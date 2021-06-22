@@ -173,7 +173,7 @@ def action_state_machine(
     outer_state: Stateful
 ) -> Tuple[Stateful, Dict[Text, List[Action]]]:
     def evaluate_alternative_states():
-        for group, fn in state_machine_fn.items():
+        for group, (fn, num_rep) in state_machine_fn.items():
             alternative_state, _ = fn(state, index, item, actions[group])
 
             if alternative_state.group != outer_state.group:
@@ -184,7 +184,7 @@ def action_state_machine(
     next_state, next_actions = None, actions
 
     if state.group in state_machine_fn:
-        next_state, next_actions[state.group] = state_machine_fn[state.group](state, index, item, actions[state.group])
+        next_state, next_actions[state.group] = state_machine_fn[state.group][0](state, index, item, actions[state.group])
     
     if (next_state is None) or (next_state.group == outer_state.group):
         next_state = evaluate_alternative_states()
@@ -223,7 +223,7 @@ def __merge_actions(
     adl_actions: Dict[Text, List[Action]],
     drill: pd.DataFrame,
     drill_actions: Dict[Text, List[Action]],
-    num_repetitions: int,
+    num_repetitions_per_action: Dict[Text, int],
     include_original: bool
 ):
     def __reduce_fn(s, a):
@@ -236,7 +236,7 @@ def __merge_actions(
             .assign(ocd=(1 if include_original else 0))
         
         repeated_activities = __repeat_actions(
-            [next(drill_actions[a[0]]) for _ in range(num_repetitions)],
+            [next(drill_actions[a[0]]) for _ in range(num_repetitions_per_action[a[0]])],
             drill,
             a[1].end
         ).assign(ocd=1)
@@ -255,7 +255,6 @@ def augment(
     adls: List[pd.DataFrame],
     drill: pd.DataFrame,
     action_collection_fn: Callable[[pd.DataFrame], Dict[Text, List[Action]]],
-    num_repetitions: int,
     include_original: bool
 ):
     adls_actions = [
@@ -282,7 +281,7 @@ def augment(
                 x[1],
                 drill,
                 drill_actions,
-                num_repetitions,
+                {key: num_reps for key, (_, num_reps) in action_collection_fn.keywords['state_machine_fn'].keywords['state_machine_fn'].items()},
                 include_original
             ),
             zip(adls, adls_actions)
