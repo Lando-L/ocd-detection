@@ -10,7 +10,7 @@ def bidirectional(
 	pos_weight: float
 ) -> tf.keras.Model:
 	return tf.keras.Sequential([
-		tf.keras.layers.Input((window_size, feature_size), name='inputs'),
+		tf.keras.layers.InputLayer((window_size, feature_size), name='inputs'),
 
 		tf.keras.layers.Dropout(dropout),
 

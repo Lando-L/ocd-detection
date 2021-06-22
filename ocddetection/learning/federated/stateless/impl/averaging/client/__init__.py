@@ -1,3 +1,4 @@
+from typing import Callable
 import attr
 
 import tensorflow as tf
@@ -48,9 +49,13 @@ class Evaluation(object):
 def update(
     dataset: tf.data.Dataset,
     message: server.Message,
-    model: tff.learning.Model,
-    optimizer: tf.keras.optimizers.Optimizer
+    model_fn: Callable,
+    optimizer_fn: Callable
 ) -> Output:
+    with tf.init_scope:
+        model = model_fn()
+        optimizer = optimizer_fn()
+
     message.model.assign_weights_to(model)
 
     def training_fn(state, batch):
@@ -87,8 +92,11 @@ def update(
 def validate(
     dataset: tf.data.Dataset,
     weights: tff.learning.ModelWeights,
-    model: tff.learning.Model
+    model_fn: Callable
 ) -> Validation:
+    with tf.init_scope:
+        model = model_fn()
+
     weights.assign_weights_to(model)
 
     for batch in dataset:
@@ -102,8 +110,11 @@ def validate(
 def evaluate(
     dataset: tf.data.Dataset,
     weights: tff.learning.ModelWeights,
-    model: tff.learning.Model,
+    model_fn: Callable
 ) -> Evaluation:
+    with tf.init_scope:
+        model = model_fn()
+    
     weights.assign_weights_to(model)
 
     def evaluation_fn(state, batch):

@@ -72,20 +72,10 @@ def __mix_weights(
 ):
     # alpha * v + (1 - alpha) * w
     def __mix(mixing_coefficients, local_variables, global_variables):
-        return [
-            tf.add(
-                tf.multiply(m, l),
-                tf.multiply(
-                    tf.subtract(
-                        tf.constant(1, dtype=tf.float32),
-                        m
-                    ),
-                    g
-                )
-            )
-
-            for m, l, g in zip(mixing_coefficients, local_variables, global_variables)
-        ]
+        return tf.nest.map_structure(
+            lambda m, l, g: m * l + (1.0 - m) * g,
+            mixing_coefficients, local_variables, global_variables
+        )
     
     return tff.learning.ModelWeights(
         trainable=__mix(mixing_coefficients, local_variables.trainable, global_variables.trainable),
@@ -96,16 +86,10 @@ def __mix_weights(
 def __mixing_gradient(mixed_gradients, local_variables, global_variables):
     # <v - w, f(v, e)>
     def subtract(xs, ys):
-        return [
-            tf.subtract(x, y)
-            for x, y in zip(xs, ys)
-        ]
+        return tf.nest.map_structure(lambda x, y: tf.subtract(x, y), xs, ys)
 
     def inner(xs, ys):
-        return [
-            tf.tensordot(x, y, axes=len(x.shape))
-            for x, y in zip(xs, ys)
-        ]
+        return tf.nest.map_structure(lambda x, y: tf.tensordot(x, y, axes=len(x.shape)), xs, ys)
     
     return inner(
         subtract(local_variables, global_variables),
@@ -132,8 +116,8 @@ def update(
         local_model = model_fn()
 
         mixed_model = model_fn()
-
-    tff.utils.assign(mixing_coefficients, state.mixing_coefficients)
+    
+    tf.nest.map_structure(lambda v, t: v.assign(t), mixing_coefficients, state.mixing_coefficients)
     message.model.assign_weights_to(global_model)
     state.model.assign_weights_to(local_model)
     __mix_weights(mixing_coefficients, state.model, message.model).assign_weights_to(mixed_model)
@@ -177,13 +161,9 @@ def update(
         )
 
         # Clip gradient to be within the interval [0, 1]
-        tff.utils.assign(
-            mixing_coefficients,
-            [tf.clip_by_value(c, 0, 1) for c in mixing_coefficients]
-        )
+        tf.nest.map_structure(lambda v: v.assign(tf.clip_by_value(v, 0, 1)), mixing_coefficients)
 
-        __mix_weights(
-            mixing_coefficients,
+        __mix_weights(mixing_coefficients,
             tff.learning.ModelWeights.from_model(local_model),
             tff.learning.ModelWeights.from_model(global_model)
         ).assign_weights_to(mixed_model)
@@ -217,7 +197,7 @@ def validate(
         mixing_coefficients = coefficient_fn()
         model = model_fn()
 
-    tff.utils.assign(mixing_coefficients, state.mixing_coefficients)
+    tf.nest.map_structure(lambda v, t: v.assign(t), mixing_coefficients, state.mixing_coefficients)
     __mix_weights(mixing_coefficients, state.model, weights).assign_weights_to(model)
 
     for batch in dataset:
@@ -239,7 +219,7 @@ def evaluate(
         mixing_coefficients = coefficient_fn()
         model = model_fn()
 
-    tff.utils.assign(mixing_coefficients, state.mixing_coefficients)
+    tf.nest.map_structure(lambda v, t: v.assign(t), mixing_coefficients, state.mixing_coefficients)
     __mix_weights(mixing_coefficients, state.model, weights).assign_weights_to(model)
 
     def evaluation_fn(state, batch):

@@ -1,5 +1,6 @@
 import attr
 import tensorflow as tf
+from tensorflow.keras import optimizers
 import tensorflow_federated as tff
 
 
@@ -38,17 +39,12 @@ def update(
     weights_delta: list
 ) -> State:
     state.model.assign_weights_to(model)
-    tff.utils.assign(optimizer.variables(), state.optimizer_state)
+    tf.nest.map_structure(lambda v, t: v.assign(t), optimizer.variables(), state.optimizer_state)
 
-    optimizer.apply_gradients(
-        tf.nest.map_structure(
-            lambda x, v: (-1.0 * x, v),
-            tf.nest.flatten(weights_delta),
-            tf.nest.flatten(model.trainable_variables)
-        )
-    )
+    neg_weights_delta = [-1.0 * x for x in weights_delta]
+    optimizer.apply_gradients(zip(neg_weights_delta, model.trainable_variables), name='server_update')
 
-    return tff.utils.update_state(
+    return tff.structure.update_struct(
         state,
         model=tff.learning.ModelWeights.from_model(model),
         optimizer_state=optimizer.variables(),

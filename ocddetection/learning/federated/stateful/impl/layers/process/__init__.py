@@ -20,16 +20,8 @@ def __initialize_optimizer(
     model: utils.PersonalizationLayersDecorator,
     optimizer: tf.keras.optimizers.Optimizer
 ):
-    model_delta = tf.nest.map_structure(tf.zeros_like, model.base_model.trainable_variables)
-
-    optimizer.apply_gradients(
-        tf.nest.map_structure(
-            lambda x, v: (tf.zeros_like(x), v),
-            tf.nest.flatten(model_delta),
-            tf.nest.flatten(model.base_model.trainable_variables)
-        )
-    )
-    
+    zero_gradient = tf.nest.map_structure(tf.zeros_like, model.trainable_variables)
+    optimizer.apply_gradients(zip(zero_gradient, model.trainable_variables))
     assert optimizer.variables()
 
 

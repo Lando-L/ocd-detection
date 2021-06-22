@@ -72,20 +72,10 @@ def __mix_weights(
 ):
     # alpha * v + (1 - alpha) * w
     def __mix(mixing_coefficient, local_variables, global_variables):
-        return [
-            tf.add(
-                tf.multiply(mixing_coefficient, local_variable),
-                tf.multiply(
-                    tf.subtract(
-                        tf.constant(1, dtype=tf.float32),
-                        mixing_coefficient
-                    ),
-                    global_variable
-                )
-            )
-
-            for local_variable, global_variable in zip(local_variables,global_variables)
-        ]
+        return tf.nest.map_structure(
+            lambda l, g: mixing_coefficient * l + (1.0 - mixing_coefficient) * g,
+            local_variables, global_variables
+        )
     
     return tff.learning.ModelWeights(
         trainable=__mix(mixing_coefficient, local_variables.trainable, global_variables.trainable),
@@ -96,26 +86,12 @@ def __mix_weights(
 def __mixing_gradient(mixed_gradients, local_variables, global_variables):
     # <v - w, f(v, e)>
     def subtract(xs, ys):
-        return [
-            tf.subtract(x, y)
-            for x, y in zip(xs, ys)
-        ]
+        return tf.nest.map_structure(lambda x, y: tf.subtract(x, y), xs, ys)
 
     def inner(xs, ys):
-        return [
-            tf.tensordot(x, y, axes=len(x.shape))
-            for x, y in zip(xs, ys)
-        ]
+        return tf.nest.map_structure(lambda x, y: tf.tensordot(x, y, axes=len(x.shape)), xs, ys)
     
-    return tf.reduce_mean(
-        tf.stack(
-            inner(
-                subtract(local_variables, global_variables),
-                mixed_gradients
-            ),
-            axis=0
-        )
-    )
+    return tf.reduce_mean(tf.stack(inner(subtract(local_variables, global_variables), mixed_gradients), axis=0))
 
 
 def update(
