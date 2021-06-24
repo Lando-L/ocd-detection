@@ -38,8 +38,7 @@ def personalized_bidirectional(
 	window_size: int,
 	feature_size: int,
 	hidden_size: int,
-	dropout: float,
-	pos_weight: float
+	dropout: float
 ) -> tf.keras.Model:
 	base_input = tf.keras.layers.Input((window_size, feature_size), name='base_inputs')
 
