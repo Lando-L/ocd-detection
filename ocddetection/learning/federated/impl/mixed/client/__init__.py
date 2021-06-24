@@ -80,7 +80,7 @@ def __mix_weights(
     
     return tff.learning.ModelWeights(
         trainable=__mix(mixing_coefficients, local_variables.trainable, global_variables.trainable),
-        non_trainable=__mix(mixing_coefficients, local_variables.non_trainable, global_variables.non_trainable)
+        non_trainable=global_variables.non_trainable
     )
 
 
