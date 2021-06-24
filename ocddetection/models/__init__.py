@@ -6,8 +6,7 @@ def bidirectional(
 	window_size: int,
 	feature_size: int,
 	hidden_size: int,
-	dropout: float,
-	pos_weight: float
+	dropout: float
 ) -> tf.keras.Model:
 	return tf.keras.Sequential([
 		tf.keras.layers.InputLayer((window_size, feature_size), name='inputs'),
@@ -30,8 +29,7 @@ def bidirectional(
 
 		tf.keras.layers.Dense(
 			1,
-			name='block_3_dense',
-			bias_initializer=tf.keras.initializers.Constant(np.log(1 / pos_weight))
+			name='block_3_dense'
 		)
 	])
 
@@ -54,7 +52,7 @@ def personalized_bidirectional(
 
 	personalized_input = tf.keras.layers.Input((2 * hidden_size), name='personalized_inputs')
 	personalized_dropout = tf.keras.layers.Dropout(dropout, name='personalized_dropout')(personalized_input)
-	personalized_dense = tf.keras.layers.Dense(1, name='personalized_dense', bias_initializer=tf.keras.initializers.Constant(np.log(1 / pos_weight)))(personalized_dropout)
+	personalized_dense = tf.keras.layers.Dense(1, name='personalized_dense')(personalized_dropout)
 	personalized_model = tf.keras.Model(inputs=personalized_input, outputs=personalized_dense)
 
 	model = tf.keras.Model(inputs=base_input, outputs=personalized_model(base_block_2_bidirectional))

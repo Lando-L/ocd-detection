@@ -40,8 +40,8 @@ def __load_data(path, window_size, batch_size) -> Tuple[tf.data.Dataset, tf.data
   return train, val, test
 
 
-def __model_fn(window_size: int, hidden_size: int, dropout: float, pos_weight: int) -> tf.keras.Model:     
-  return models.bidirectional(window_size, len(SENSORS), hidden_size, dropout, pos_weight)
+def __model_fn(window_size: int, hidden_size: int, dropout: float) -> tf.keras.Model:     
+  return models.bidirectional(window_size, len(SENSORS), hidden_size, dropout)
 
 
 def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
@@ -126,7 +126,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
   mlflow.set_experiment(experiment_name)
   train, val, _ = __load_data(config.path, config.window_size, config.batch_size)
   
-  model = __model_fn(config.window_size, config.hidden_size, config.dropout, config.pos_weight)
+  model = __model_fn(config.window_size, config.hidden_size, config.dropout)
   loss_fn = losses.WeightedBinaryCrossEntropy(config.pos_weight)
   optimizer = __optimizer_fn(config.learning_rate)
   

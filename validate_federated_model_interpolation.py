@@ -3,8 +3,8 @@ from argparse import ArgumentParser
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.learning.federated.stateful import validation
-from ocddetection.learning.federated.stateful.impl import interpolation
+from ocddetection.learning.federated.simulation import validation
+from ocddetection.learning.federated.impl import interpolation
 
 
 def __arg_parser() -> ArgumentParser:
