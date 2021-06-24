@@ -103,6 +103,7 @@ def update(
         metrics=model.report_local_outputs(),
         client_state=State(
             client_index=state.client_index,
+            client_pos_weight=state.client_pos_weight,
             model=tff.learning.ModelWeights.from_model(model.personalized_model)
         )
     )

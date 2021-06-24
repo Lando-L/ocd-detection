@@ -23,7 +23,7 @@ Config = namedtuple(
 )
 
 
-def __load_data(path, epochs, window_size, batch_size) -> Iterable[Tuple[FederatedDataset, FederatedDataset, FederatedDataset]]:
+def __load_data(path, epochs, window_size, batch_size) -> Tuple[FederatedDataset, FederatedDataset, FederatedDataset]:
 	files = pd.Series(
 		[os.path.join(path, f'S{subject}-ADL{run}-AUGMENTED.csv') for subject in range(1, 5) for run in range(1, 6)],
 		index=pd.MultiIndex.from_product([list(range(1, 5)), list(range(1, 6))]),

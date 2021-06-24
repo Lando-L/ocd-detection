@@ -34,8 +34,8 @@ class Output(object):
     """
     weights_delta = attr.ib()
     client_weight = attr.ib()
-    client_pos_weight = attr.ib()
     metrics = attr.ib()
+    client_state = attr.ib()
 
 
 @attr.s(eq=False, frozen=True, slots=True)
@@ -46,7 +46,6 @@ class Validation(object):
     Fields:
         - `metrics`: A structure matching `tff.learning.Model.report_local_outputs`, reflecting the results of training on the input dataset.
     """
-    client_pos_weight = attr.ib()
     metrics = attr.ib()
 
 
@@ -59,7 +58,6 @@ class Evaluation(object):
         - `confusion_matrix`: Confusion matrix
         - `metrics`: A structure matching `tff.learning.Model.report_local_outputs`, reflecting the results of training on the input dataset.
     """
-    client_pos_weight = attr.ib()
     confusion_matrix = attr.ib()
     metrics = attr.ib()
 
@@ -104,7 +102,11 @@ def update(
     return Output(
         weights_delta=weights_delta,
         metrics=model.report_local_outputs(),
-        client_weight=tf.cast(client_weight, dtype=tf.float32)
+        client_weight=tf.cast(client_weight, dtype=tf.float32),
+        client_state=State(
+            client_index=state.client_index,
+            client_pos_weight=state.client_pos_weight
+        )
     )
 
 
