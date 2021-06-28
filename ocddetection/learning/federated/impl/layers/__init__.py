@@ -35,7 +35,7 @@ def __model_fn(
 def __client_state_fn(idx: int, pos_weight: float, weights: tff.learning.ModelWeights):
 	return client.State(
 		tf.constant(idx, dtype=tf.int32),
-		tf.constant(pos_weight=tf.float32),
+		tf.constant(pos_weight, dtype=tf.float32),
 		weights
 	)
 
