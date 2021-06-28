@@ -60,7 +60,7 @@ def __evaluation_metrics_fn() -> List[tf.keras.metrics.Metric]:
 
 
 def __optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.SGD(learning_rate=learning_rate, momentum=0.9)
+  return tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
 
 def __train_step(

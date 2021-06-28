@@ -1,7 +1,7 @@
 from collections import namedtuple
 from functools import partial, reduce
 import os
-from typing import Callable, Dict, Iterable, List, Text, Tuple
+from typing import Callable, Dict, List, Text, Tuple
 
 import matplotlib.pylab as plt
 import mlflow
@@ -58,11 +58,11 @@ def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
 
 
 def __client_optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.Adam(learning_rate)
+  return tf.keras.optimizers.SGD(tf.keras.optimizers.schedules.ExponentialDecay(learning_rate, 100, 0.9, staircase=True))
 
 
 def __server_optimizer_fn() -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.SGD(1.0, momentum=.9)
+  return tf.keras.optimizers.Adam(1.0)
 
 
 def __train_step(
