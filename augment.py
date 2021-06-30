@@ -1,8 +1,11 @@
 from argparse import ArgumentParser
 from functools import partial
+import glob
 import os
+import re
+from typing import List, Text, Tuple
 
-import tensorflow as tf
+import pandas as pd
 
 from ocddetection import data
 from ocddetection.data import augmentation
@@ -19,6 +22,37 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('--exclude-original', dest='include_original', action='store_const', const=False, default=True)
 
     return parser
+
+
+def __get_files(pattern, root: Text) -> Tuple[List[Text], List[pd.DataFrame]]:
+    ids = []
+    files = []
+    
+    for path in glob.iglob(root):
+        matched = pattern.match(os.path.basename(path))
+        
+        if matched:
+            ids.append(int(matched.group(2)))
+            files.append(augmentation.read_dat(path))
+    
+    return ids, files
+
+
+def __write_augmented(df: pd.DataFrame, output: Text, subject: int, run: int) -> None:
+    df.drop(data.MID_LEVEL_COLUMN, axis=1).to_csv(
+        os.path.join(output, f'S{subject}-ADL{run}-AUGMENTED.csv'),
+        index=False,
+        header=False
+    )
+
+
+def __write_meta(df: pd.DataFrame, output: Text, subject: int, run: int) -> None:
+    df.to_csv(
+        os.path.join(output, f'S{subject}-ADL{run}-META.csv'),
+        index=True,
+        columns=[data.MID_LEVEL_COLUMN, 'ocd'],
+        header=['activity', 'ocd']
+    )
 
 
 def main() -> None:
@@ -132,9 +166,11 @@ def main() -> None:
         subject_three_collect_fn,
         None
     ]
+
+    file_regex = re.compile(f'S(\d)-ADL(\d).dat')
     
     for subject, collect_fn in enumerate(collect_fns, start=1):
-        adls = list(map(augmentation.read_dat, tf.io.gfile.glob(os.path.join(args.path, f'S{subject}-ADL?.dat'))))
+        ids, adls = __get_files(file_regex, os.path.join(args.path, f'S{subject}-ADL?.dat'))
 
         if collect_fn:
             drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))
@@ -143,19 +179,9 @@ def main() -> None:
         else:
             augmented = [adl.assign(ocd=0) for adl in adls]
 
-        for run, df in enumerate(augmented, start=1):
-            df.drop(data.MID_LEVEL_COLUMN, axis=1).to_csv(
-                os.path.join(args.output, f'S{subject}-ADL{run}-AUGMENTED.csv'),
-                index=False,
-                header=False
-            )
-
-            df.to_csv(
-                os.path.join(args.output, f'S{subject}-ADL{run}-META.csv'),
-                index=True,
-                columns=[data.MID_LEVEL_COLUMN, 'ocd'],
-                header=['activity', 'ocd']
-            )
+        for run, df in zip(ids, augmented):
+            __write_augmented(df, args.output, subject, run)
+            __write_meta(df, args.output, subject, run)
 
 
 if __name__ == "__main__":
