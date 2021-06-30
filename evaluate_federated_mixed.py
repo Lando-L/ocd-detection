@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
-from ocddetection.learning.federated.stateful import evaluation
-from ocddetection.learning.federated.stateful.impl import mixed
+from ocddetection.learning.federated.simulation import evaluation
+from ocddetection.learning.federated.impl import mixed
 
 
 def __arg_parser() -> ArgumentParser:
