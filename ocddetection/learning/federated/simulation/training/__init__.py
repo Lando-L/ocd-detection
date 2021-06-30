@@ -45,15 +45,17 @@ def __load_data(path, epochs, window_size, batch_size) -> Tuple[FederatedDataset
 
 def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
   return [
-		metrics.AUC(from_logits=True, curve='PR', name='auc')
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='auc')
 	]
 
 
 def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
-  thresholds = list(np.linspace(0, 1, 200, endpoint=False))
-  return [
-    metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),
-    metrics.Recall(from_logits=True, thresholds=thresholds, name='recall')
+	thresholds = list(np.linspace(0, 1, 200, endpoint=False))
+	return [
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='auc'),
+		metrics.SigmoidDecorator(tf.keras.metrics.Precision(thresholds=thresholds), name='precision'),
+		metrics.SigmoidDecorator(tf.keras.metrics.Recall(thresholds=thresholds), name='recall'),
+		metrics.SigmoidDecorator(tf.keras.metrics.BinaryAccuracy(), name='accuracy'),
   ]
 
 
@@ -128,9 +130,9 @@ def __evaluate(
 	weights: tff.learning.ModelWeights,
   client_states: Dict[int, ClientState],
 	dataset: FederatedDataset,
-	evaluation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset], List[ClientState]], Tuple[tf.Tensor, Dict[Text, tf.Tensor]]]
+	evaluation_fn: Callable[[tff.learning.ModelWeights, List[tf.data.Dataset], List[ClientState]], Tuple[tf.Tensor, Dict[Text, tf.Tensor], Dict[Text, tf.Tensor]]]
 ) -> None:
-	confusion_matrix, metrics = evaluation_fn(
+	confusion_matrix, aggregated_metrics, client_metrics = evaluation_fn(
 		weights,
 		[dataset.data[client] for client in dataset.clients],
     [client_states[client] for client in dataset.clients]
@@ -150,7 +152,7 @@ def __evaluate(
 	# Precision Recall
 	fig, ax = plt.subplots(figsize=(16, 8))
 
-	sns.lineplot(x=metrics['recall'], y=metrics['precision'], ax=ax)
+	sns.lineplot(x=aggregated_metrics['recall'], y=aggregated_metrics['precision'], ax=ax)
 
 	ax.set_xlabel('Recall')
 	ax.set_xlim(0., 1.)
@@ -160,6 +162,17 @@ def __evaluate(
 
 	mlflow.log_figure(fig, f'precision_recall.png')
 	plt.close(fig)
+
+	# Client Metrics
+	auc = metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='auc')
+	accuracy = metrics.SigmoidDecorator(tf.keras.metrics.BinaryAccuracy(), name='accuracy')
+
+	for i, client in enumerate(iter(client_metrics), start=1):
+		tf.nest.map_structure(lambda v, t: v.assign(t), auc.variables, list(client['auc']))
+		tf.nest.map_structure(lambda v, t: v.assign(t), accuracy.variables, list(client['accuracy']))
+
+		mlflow.log_metric(f'client_{i}_val_auc', auc.result().numpy())
+		mlflow.log_metric(f'client_{i}_val_acc', accuracy.result().numpy())
 
 
 def run(
