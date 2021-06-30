@@ -58,11 +58,11 @@ def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
 
 
 def __client_optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.SGD(tf.keras.optimizers.schedules.ExponentialDecay(learning_rate, 100, 0.9, staircase=True))
+  return tf.keras.optimizers.SGD(learning_rate)
 
 
 def __server_optimizer_fn() -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.Adam(1.0)
+  return tf.keras.optimizers.Adam(0.1)
 
 
 def __train_step(
