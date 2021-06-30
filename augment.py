@@ -83,7 +83,7 @@ def main() -> None:
     door_one_state_machine = augmentation.two_state_action_state_machine_fn(
         'door_1',
         'Open Door 1',
-        'Close Coor 1',
+        'Close Door 1',
         outer_state
     )
 
