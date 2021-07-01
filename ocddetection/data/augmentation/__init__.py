@@ -3,9 +3,7 @@ from itertools import cycle
 from functools import partial, reduce
 from typing import Callable, Dict, List, Text, Tuple
 
-import numpy as np
 import pandas as pd
-import tensorflow as tf
 
 from ocddetection.data import MID_LEVEL_COLUMN, MID_LEVEL_LABELS, SENSORS
 
@@ -138,7 +136,7 @@ def one_state_action_state_machine_fn(
 ) -> STATE_MACHINE_FN:  
     return partial(
         __one_state_action_state_machine,
-        state_action='Clean Table',
+        state_action=action,
         state_fn=__one_state_action_fn(group, action),
         outer_state=outer_state
     )
