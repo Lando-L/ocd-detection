@@ -19,11 +19,12 @@ def __arg_parser() -> ArgumentParser:
 
     parser.add_argument('--include-original', dest='include_original', action='store_const', const=True, default=True)
     parser.add_argument('--exclude-original', dest='include_original', action='store_const', const=False, default=True)
+    parser.add_argument('-dhs', '--door-hack-subject', dest='door_hack_subject', type=int, default=None)
 
     return parser
 
 
-def __get_files(pattern, root: Text) -> Tuple[List[Text], List[pd.DataFrame]]:
+def __get_files(pattern, root: Text, apply_hack) -> Tuple[List[Text], List[pd.DataFrame]]:
     ids = []
     files = []
     
@@ -32,7 +33,7 @@ def __get_files(pattern, root: Text) -> Tuple[List[Text], List[pd.DataFrame]]:
         
         if matched:
             ids.append(int(matched.group(2)))
-            files.append(augmentation.read_dat(path))
+            files.append(augmentation.read_dat(path, apply_hack))
     
     return ids, files
 
@@ -82,8 +83,8 @@ def main() -> None:
     # Door 1
     door_one_state_machine = augmentation.two_state_action_state_machine_fn(
         'door_1',
-        'Open Door 1',
         'Close Door 1',
+        'Open Door 1',
         outer_state
     )
 
@@ -177,7 +178,7 @@ def main() -> None:
     file_regex = re.compile(f'S(\d)-ADL(\d).dat')
     
     for subject, collect_fn in enumerate(collect_fns, start=1):
-        ids, adls = __get_files(file_regex, os.path.join(args.path, f'S{subject}-ADL?.dat'))
+        ids, adls = __get_files(file_regex, os.path.join(args.path, f'S{subject}-ADL?.dat'), (subject == args.door_hack_subject))
 
         if collect_fn:
             drill = augmentation.read_dat(os.path.join(args.path, f'S{subject}-Drill.dat'))

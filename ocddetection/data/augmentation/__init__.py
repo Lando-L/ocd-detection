@@ -15,12 +15,32 @@ TRANSITION_FN = Callable[[pd.Timedelta, pd.Timedelta], Stateful]
 STATE_MACHINE_FN = Callable[[Stateful, pd.Timedelta, Text, List[Action]], Tuple[Stateful, List[Action]]]
 
 
-def read_dat(path: Text) -> pd.DataFrame:
+def read_dat(path: Text, apply_hack=False) -> pd.DataFrame:
     df = pd.read_csv(path, sep=' ', index_col=0, header=None, usecols=[0] + SENSORS + [MID_LEVEL_COLUMN]).dropna()
     df = df.set_index(pd.to_timedelta(df.index, 'ms'))
     df[MID_LEVEL_COLUMN] = df[MID_LEVEL_COLUMN].astype('category')
     df[MID_LEVEL_COLUMN].cat.categories = [MID_LEVEL_LABELS[int(cat)] for cat in df[MID_LEVEL_COLUMN].cat.categories]
-    
+
+    if apply_hack:
+        # Since opening/closing doors is sometimes disrupted by other activities in between,
+        # we use this hack to inject an open-action before augmenting the data
+        open_door_1_df = df[MID_LEVEL_COLUMN] == 'Open Door 1'
+        #open_door_2_df = df[MID_LEVEL_COLUMN] == 'Open Door 2'
+
+        # Find first close_door_event
+        open_door_1_df = open_door_1_df & ~open_door_1_df.shift(1, fill_value=True)
+        #open_door_2_df = open_door_2_df & ~open_door_2_df.shift(1, fill_value=True)
+
+        inject_close_1_df = open_door_1_df.shift(-1, fill_value=False)
+        #inject_close_2_df = open_door_2_df.shift(-1, fill_value=False)
+
+        overwritten_value_counts = df[inject_close_1_df][MID_LEVEL_COLUMN].value_counts()
+        #overwritten_value_counts = df[inject_close_1_df | inject_close_2_df][MID_LEVEL_COLUMN].value_counts()
+        assert(overwritten_value_counts[overwritten_value_counts != 0].index == ['Null'])
+
+        df.loc[inject_close_1_df, MID_LEVEL_COLUMN] = 'Close Door 1'
+        #df.loc[inject_close_2_df, MID_LEVEL_COLUMN] = 'Close Door 2'
+
     return df
 
 
@@ -228,11 +248,17 @@ def __merge_actions(
         non_ocd = adl \
             .loc[s[0]:a[1].start] \
             .assign(ocd=0)
-        
+
         original_activity = adl \
             .loc[a[1].start:a[1].end] \
             .assign(ocd=(1 if include_original else 0))
-        
+
+        # revert door hack
+        if a[0] == 'door_1' or a[0] == 'door_2':
+            if original_activity.iloc[0][MID_LEVEL_COLUMN].split()[0] == 'Close' and original_activity.iloc[1][MID_LEVEL_COLUMN].split()[0] == 'Open':
+                original_activity.at[original_activity.index[0], MID_LEVEL_COLUMN] = 'Null'
+                original_activity.at[original_activity.index[0], 'ocd'] = 0
+
         repeated_activities = __repeat_actions(
             [next(drill_actions[a[0]]) for _ in range(num_repetitions_per_action[a[0]])],
             drill,
