@@ -169,8 +169,8 @@ def main() -> None:
     collect_fns = [
         subject_one_collect_fn,
         subject_two_collect_fn,
-        subject_four_collect_fn,
-        None
+        None,
+        subject_four_collect_fn
     ]
 
     file_regex = re.compile(f'S(\d)-ADL(\d).dat')
