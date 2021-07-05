@@ -27,6 +27,9 @@ class MetricsDecorator(tf.keras.metrics.Metric, metaclass=abc.ABCMeta):
 
   def result(self):
     return self._metric.result()
+  
+  def reset_states(self):
+    self._metric.reset_states()
 
 
 class LogitsDecorator(MetricsDecorator):

@@ -118,9 +118,10 @@ def __fit(
 	next_state, metrics, next_client_states = train_step_fn(state[0], state[1])
 	mlflow.log_metrics(metrics, step=round_num)
 
+	test_metrics = validation_step_fn(next_state.model, next_client_states)
+	mlflow.log_metrics(test_metrics, step=round_num)
+
 	if round_num % checkpoint_rate == 0:
-		test_metrics = validation_step_fn(next_state.model, next_client_states)
-		mlflow.log_metrics(test_metrics, step=round_num)
 		checkpoint_manager.save_checkpoint([next_state, next_client_states], round_num)
 
 	return next_state, next_client_states
