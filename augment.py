@@ -105,14 +105,15 @@ def main() -> None:
     )
 
     # --- Subject 1 ---
-    # toggle switch, clean table, open/close fridge
-    # magic number: 4
+    # repeat open/close door 1 (and NOT door 2)
+    # further compulsions: open/close fridge, open/close dishwasher
+    # magic number: 3
     subject_one_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'toggle_switch': (switch_state_machine, 4),
-            'clean_table': (clean_table_state_machine, 4),
-            'fridge': (fridge_state_machine, 4)
+            'door_1': (door_one_state_machine, 3),
+            'fridge': (fridge_state_machine, 3),
+            'dishwasher': (dishwasher_state_machine, 3)
         },
         outer_state=outer_state
     )
@@ -124,15 +125,16 @@ def main() -> None:
     )
 
     # --- Subject 2 ---
-    # repeat open/close door 1 (and NOT door 2)
-    # further compulsions: open/close fridge, open/close dishwasher
-    # magic number: 3
+    # different magic numbers for compulsions
+    # toggle switch: 5
+    # open / close dishwasher: 3
+    # open / close fridge: 3
     subject_two_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'door_1': (door_one_state_machine, 3),
-            'fridge': (fridge_state_machine, 3),
-            'dishwasher': (dishwasher_state_machine, 3)
+            'toggle_switch': (switch_state_machine, 5),
+            'dishwasher': (dishwasher_state_machine, 4),
+            'fridge': (fridge_state_machine, 3)
         },
         outer_state=outer_state
     )
@@ -143,35 +145,31 @@ def main() -> None:
         outer_state=outer_state
     )
 
-    # --- Subject 3 ---
-    # different magic numbers for compulsions
-    # toggle switch: 5
-    # clean table: 4
-    # open / close dishwasher: 3
-    # open / close fridge: 3
-    subject_three_state_machine = partial(
+    # Subject 3 - healthy, no OCD behavior
+
+    # --- Subject 4 ---
+    # toggle switch, clean table, open/close fridge
+    # magic number: 4
+    subject_four_state_machine = partial(
         augmentation.action_state_machine,
         state_machine_fn={
-            'toggle_switch': (switch_state_machine, 5),
+            'toggle_switch': (switch_state_machine, 4),
             'clean_table': (clean_table_state_machine, 4),
-            'dishwasher': (dishwasher_state_machine, 3),
-            'fridge': (fridge_state_machine, 3)
+            'fridge': (fridge_state_machine, 4)
         },
         outer_state=outer_state
     )
 
-    subject_three_collect_fn = partial(
+    subject_four_collect_fn = partial(
         augmentation.collect_actions,
-        state_machine_fn=subject_three_state_machine,
+        state_machine_fn=subject_four_state_machine,
         outer_state=outer_state
     )
-
-    # Subject 4 - healthy, no OCD behavior
 
     collect_fns = [
         subject_one_collect_fn,
         subject_two_collect_fn,
-        subject_three_collect_fn,
+        subject_four_collect_fn,
         None
     ]
 
