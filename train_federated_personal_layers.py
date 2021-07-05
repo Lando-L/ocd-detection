@@ -47,7 +47,7 @@ def main() -> None:
 
     training.run(
         'OCD Detection',
-        'FedPL',
+        'FedPer',
         layers.setup,
         training.Config(**vars(args))
     )

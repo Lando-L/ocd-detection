@@ -32,7 +32,7 @@ def __load_data(path, epochs, window_size, batch_size) -> Tuple[FederatedDataset
 
 	train_files, val_files, test_files = preprocessing.split(
 		files,
-		validation=[(subject, 4) for subject in range(1, 5)],
+		validation=[],
 		test=[(subject, 5) for subject in range(1, 5)]
 	)
 
@@ -64,7 +64,7 @@ def __client_optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer
 
 
 def __server_optimizer_fn() -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.Adam(0.1)
+  return tf.keras.optimizers.SGD(1.0, momentum=0.9)
 
 
 def __train_step(
@@ -193,11 +193,11 @@ def run(
     __server_optimizer_fn
 	)
 	
-	train, val, _ = __load_data(config.path, config.epochs, config.window_size, config.batch_size)
+	train, _, test = __load_data(config.path, config.epochs, config.window_size, config.batch_size)
 
 	checkpoint_manager = tff.simulation.FileCheckpointManager(config.output)
 
-	client_idx2id = list(train.clients.union(val.clients))
+	client_idx2id = list(sorted(train.clients.union(test.clients)))
 	client_states = {i: client_state_fn(idx, pos_weight) for idx, (i, pos_weight) in enumerate(zip(client_idx2id, config.pos_weights))}
 
 	train_step = partial(
@@ -210,7 +210,7 @@ def run(
 
 	validation_step = partial(
 		__validation_step,
-		dataset=val,
+		dataset=test,
 		validation_fn=validator
 	)
 
@@ -224,7 +224,7 @@ def run(
 
 	evaluation_fn = partial(
 		__evaluate,
-		dataset=val,
+		dataset=test,
 		evaluation_fn=evaluator
 	)
 
