@@ -246,7 +246,7 @@ def __merge_actions(
 ):
     def __reduce_fn(s, a):
         non_ocd = adl \
-            .loc[s[0]:a[1].start] \
+            .loc[s[0]:a[1].start][:-1] \
             .assign(ocd=0)
 
         original_activity = adl \
