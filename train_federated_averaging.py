@@ -22,7 +22,7 @@ def __arg_parser() -> ArgumentParser:
     parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--window-size', type=int, default=150)
-    parser.add_argument('--pos-weights', type=float, nargs='+', default=[7, 5.25, 3, 0])
+    parser.add_argument('--pos-weights', type=float, nargs='+', default=[11.6, 4.5, 0.0, 6.5])
 
     # Model
     parser.add_argument('--hidden-size', type=int, default=64)
