@@ -75,7 +75,7 @@ def update(
 
     message.model.assign_weights_to(model)
 
-    def training_fn(state, batch):
+    def training_fn(num_examples, batch):
         with tf.GradientTape() as tape:
             outputs = model.forward_pass(batch, training=True)
 
@@ -86,7 +86,7 @@ def update(
             )
         )
 
-        return state + outputs.num_examples
+        return num_examples + outputs.num_examples
 
     client_weight = dataset.reduce(
         tf.constant(0, dtype=tf.int32),

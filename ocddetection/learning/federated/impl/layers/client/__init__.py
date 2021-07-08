@@ -76,13 +76,10 @@ def update(
 
     message.model.assign_weights_to(model.base_model)
     state.model.assign_weights_to(model.personalized_model)
-    client_weight = tf.constant(0, dtype=tf.int32)
 
-    for batch in dataset:
+    def training_fn(num_examples, batch):
         with tf.GradientTape() as tape:
             outputs = model.forward_pass(batch, training=True)
-
-        client_weight += outputs.num_examples
         
         optimizer.apply_gradients(
             zip(
@@ -90,6 +87,13 @@ def update(
                 model.trainable_variables
             )
         )
+
+        return num_examples + outputs.num_examples
+    
+    client_weight = dataset.reduce(
+        tf.constant(0, dtype=tf.int32),
+        training_fn
+    )
 
     weights_delta = tf.nest.map_structure(
         lambda a, b: a - b,

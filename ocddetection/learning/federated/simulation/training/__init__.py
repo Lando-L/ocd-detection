@@ -168,12 +168,12 @@ def __evaluate(
 	auc = metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='auc')
 	accuracy = metrics.SigmoidDecorator(tf.keras.metrics.BinaryAccuracy(), name='accuracy')
 
-	for i, client in enumerate(iter(client_metrics), start=1):
-		tf.nest.map_structure(lambda v, t: v.assign(t), auc.variables, list(client['auc']))
-		tf.nest.map_structure(lambda v, t: v.assign(t), accuracy.variables, list(client['accuracy']))
+	for client, metric in zip(client_states.keys(), iter(client_metrics)):
+		tf.nest.map_structure(lambda v, t: v.assign(t), auc.variables, list(metric['auc']))
+		tf.nest.map_structure(lambda v, t: v.assign(t), accuracy.variables, list(metric['accuracy']))
 
-		mlflow.log_metric(f'client_{i}_val_auc', auc.result().numpy())
-		mlflow.log_metric(f'client_{i}_val_acc', accuracy.result().numpy())
+		mlflow.log_metric(f'client_{client}_val_auc', auc.result().numpy())
+		mlflow.log_metric(f'client_{client}_val_acc', accuracy.result().numpy())
 
 
 def run(
@@ -199,7 +199,10 @@ def run(
 	checkpoint_manager = tff.simulation.FileCheckpointManager(config.output)
 
 	client_idx2id = list(sorted(train.clients.union(test.clients)))
-	client_states = {i: client_state_fn(idx, pos_weight) for idx, (i, pos_weight) in enumerate(zip(client_idx2id, config.pos_weights))}
+	client_states = {
+		i: client_state_fn(idx, pos_weight)
+		for idx, (i, pos_weight) in enumerate(zip(client_idx2id, config.pos_weights))
+	}
 
 	train_step = partial(
 		__train_step,
