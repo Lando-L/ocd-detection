@@ -46,16 +46,19 @@ def __model_fn(window_size: int, hidden_size: int, dropout: float) -> tf.keras.M
 
 def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
   return [
-    metrics.AUC(from_logits=True, curve='PR', name='auc')
-  ]
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='pr_auc'),
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='ROC'), name='roc_auc')
+	]
 
 
 def __evaluation_metrics_fn() -> List[tf.keras.metrics.Metric]:
-  thresholds = list(np.linspace(0, 1, 200, endpoint=False))
-
-  return [
-    metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),
-    metrics.Recall(from_logits=True, thresholds=thresholds, name='recall')
+	thresholds = list(np.linspace(0, 1, 200, endpoint=False))
+	return [
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='pr_auc'),
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='ROC'), name='roc_auc'),
+		metrics.SigmoidDecorator(tf.keras.metrics.Precision(thresholds=thresholds), name='precision'),
+		metrics.SigmoidDecorator(tf.keras.metrics.Recall(thresholds=thresholds), name='recall'),
+		metrics.SigmoidDecorator(tf.keras.metrics.BinaryAccuracy(), name='accuracy'),
   ]
 
 

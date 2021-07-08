@@ -45,14 +45,16 @@ def __load_data(path, epochs, window_size, batch_size) -> Tuple[FederatedDataset
 
 def __training_metrics_fn() -> List[tf.keras.metrics.Metric]:
   return [
-		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='auc')
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='pr_auc'),
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='ROC'), name='roc_auc')
 	]
 
 
 def __validation_metrics_fn() -> List[tf.keras.metrics.Metric]:
 	thresholds = list(np.linspace(0, 1, 200, endpoint=False))
 	return [
-		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='auc'),
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='PR'), name='pr_auc'),
+		metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='ROC'), name='roc_auc'),
 		metrics.SigmoidDecorator(tf.keras.metrics.Precision(thresholds=thresholds), name='precision'),
 		metrics.SigmoidDecorator(tf.keras.metrics.Recall(thresholds=thresholds), name='recall'),
 		metrics.SigmoidDecorator(tf.keras.metrics.BinaryAccuracy(), name='accuracy'),
