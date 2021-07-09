@@ -174,7 +174,7 @@ def __evaluate(
     roc_auc = metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='ROC'), name='roc_auc')
     accuracy = metrics.SigmoidDecorator(tf.keras.metrics.BinaryAccuracy(), name='accuracy')
 
-	for client, metric in zip(client_states.keys(), iter(client_metrics)):
+    for client, metric in zip(client_states.keys(), iter(client_metrics)):
         tf.nest.map_structure(lambda v, t: v.assign(t), pr_auc.variables, list(metric['pr_auc']))
         tf.nest.map_structure(lambda v, t: v.assign(t), roc_auc.variables, list(metric['roc_auc']))
         tf.nest.map_structure(lambda v, t: v.assign(t), accuracy.variables, list(metric['accuracy']))
@@ -209,11 +209,12 @@ def run(
 
     checkpoint_manager = tff.simulation.FileCheckpointManager(config.output)
 
-	client_idx2id = list(sorted(train.clients.union(test.clients)))
-	client_states = {
-		i: client_state_fn(idx, pos_weight)
-		for idx, (i, pos_weight) in enumerate(zip(client_idx2id, config.pos_weights))
-	}
+    client_idx2id = list(sorted(train.clients.union(test.clients)))
+    client_states = {
+        i: client_state_fn(idx, pos_weight)
+        for idx, (i, pos_weight) in enumerate(zip(client_idx2id, config.pos_weights))
+    }
+
 
     train_step = partial(
         __train_step,
@@ -254,21 +255,23 @@ def run(
 
         confusion_matrix, aggregated_metrics, client_metrics = evaluation_fn(server_state.model, client_states)
 
-        # log metrics
-        import json
+    # log metrics
+    import json
 
-        with open(f'./{config.output}/metrics.json', 'a') as metrics_file:
-            json.dump({'confusion_matrix': confusion_matrix.tolist()}, metrics_file, indent=4)
-            for key, value in aggregated_metrics.items():
-                if isinstance(value, np.ndarray):
-                    json.dump({key: value.tolist()}, metrics_file, indent=4)
+    with open(f'./{config.output}/metrics.json', 'a') as metrics_file:
+        json.dump({'confusion_matrix': confusion_matrix.tolist()}, metrics_file, indent=4)
+        for key, value in aggregated_metrics.items():
+            if isinstance(value, np.ndarray):
+                json.dump({key: value.tolist()}, metrics_file, indent=4)
+            else:
+                json.dump({key: float(value)}, metrics_file, indent=4)
+        for i, m in enumerate(iter(client_metrics), start=1):
+            for key, value in m.items():
+                print(f'{i} - {key}:{value}')
+                if isinstance(value, np.ndarray) or isinstance(value, tf.Tensor):
+                    json.dump({f'client_{i}_{key}': value.tolist()}, metrics_file, indent=4)
+                if isinstance(value, tuple):
+                    value = np.array([item.numpy() for item in value])
+                    json.dump({f'client_{i}_{key}': value.tolist()}, metrics_file, indent=4)
                 else:
-                    json.dump({key: float(value)}, metrics_file, indent=4)
-            for i, m in enumerate(iter(client_metrics), start=1):
-                for key, value in m.items():
-                    print(f'{i} - {key}:{value}')
-                    if isinstance(value, np.ndarray) or isinstance(value, tf.Tensor) or isinstance(value, tuple):
-                        json.dump({f'client_{i}_{key}': value.tolist()}, metrics_file, indent=4)
-                    else:
-                        json.dump({f'client_{i}_{key}': float(value)}, metrics_file, indent=4)
-
+                    json.dump({f'client_{i}_{key}': float(value)}, metrics_file, indent=4)
