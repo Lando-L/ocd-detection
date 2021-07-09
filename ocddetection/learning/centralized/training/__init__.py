@@ -1,5 +1,5 @@
 from collections import namedtuple
-from functools import partial
+from functools import partial, reduce
 import os
 from typing import List, Tuple
 
@@ -27,15 +27,15 @@ def __load_data(path, window_size, batch_size) -> Tuple[tf.data.Dataset, tf.data
     name='path'
   )
 
-  train_files, val_files, test_files = preprocessing.split(
+  train_files, _, test_files = preprocessing.split(
     files,
-    validation=[(subject, 4) for subject in range(1, 5)],
+    validation=[],
     test=[(subject, 5) for subject in range(1, 5)]
   )
 
   train = preprocessing.to_centralised(train_files, window_size, batch_size)
-  val = preprocessing.to_centralised(val_files, window_size, batch_size)
-  test = preprocessing.to_centralised(test_files, window_size, batch_size)
+  val = preprocessing.to_centralised(test_files, window_size, batch_size)
+  test = preprocessing.to_federated(test_files, window_size, batch_size)
 
   return train, val, test
 
@@ -63,7 +63,7 @@ def __evaluation_metrics_fn() -> List[tf.keras.metrics.Metric]:
 
 
 def __optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
-  return tf.keras.optimizers.Adam(learning_rate=learning_rate)
+  return tf.keras.optimizers.SGD(learning_rate=learning_rate)
 
 
 def __train_step(
@@ -127,7 +127,7 @@ def __evaluation_step(
 
 def run(experiment_name: str, run_name: str, config: Config) -> None:
   mlflow.set_experiment(experiment_name)
-  train, val, _ = __load_data(config.path, config.window_size, config.batch_size)
+  train, val, test = __load_data(config.path, config.window_size, config.batch_size)
   
   model = __model_fn(config.window_size, config.hidden_size, config.dropout)
   loss_fn = losses.WeightedBinaryCrossEntropy(config.pos_weight)
@@ -191,7 +191,22 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
         ckpt_manager.save()
     
     # Evaluation
-    confusion_matrix = val.reduce(eval_state, eval_step)
+    def evaluate(confusion_matrix, client):
+      # Reset PR-AUC and Accuracy metrics
+      eval_metrics[0].reset_states()
+      eval_metrics[3].reset_states()
+
+      results = test[client].reduce(eval_state, eval_step)
+      mlflow.log_metrics(f'client_{client}_val_auc', eval_metrics[0].result().numpy())
+      mlflow.log_metrics(f'client_{client}_val_acc', eval_metrics[3].result().numpy())
+
+      return confusion_matrix + results
+
+    confusion_matrix = reduce(
+      evaluate,
+      test.clients,
+      tf.zeros((2, 2), dtype=tf.int32)
+    )
 
     # Confusion matrix
     fig, ax = plt.subplots(figsize=(16, 8))
@@ -206,7 +221,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
 
     # Precision Recall
     fig, ax = plt.subplots(figsize=(16, 8))
-    sns.lineplot(x=eval_metrics[0].result().numpy(), y=eval_metrics[1].result().numpy(), ax=ax)
+    sns.lineplot(x=eval_metrics[2].results().numpy(), y=eval_metrics[1].results().numpy(), ax=ax)
 
     ax.set_xlabel('Recall')
     ax.set_xlim(0., 1.)

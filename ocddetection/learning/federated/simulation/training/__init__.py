@@ -174,14 +174,14 @@ def __evaluate(
     roc_auc = metrics.SigmoidDecorator(tf.keras.metrics.AUC(curve='ROC'), name='roc_auc')
     accuracy = metrics.SigmoidDecorator(tf.keras.metrics.BinaryAccuracy(), name='accuracy')
 
-    for i, client in enumerate(iter(client_metrics), start=1):
-        tf.nest.map_structure(lambda v, t: v.assign(t), pr_auc.variables, list(client['pr_auc']))
-        tf.nest.map_structure(lambda v, t: v.assign(t), roc_auc.variables, list(client['roc_auc']))
-        tf.nest.map_structure(lambda v, t: v.assign(t), accuracy.variables, list(client['accuracy']))
+	for client, metric in zip(client_states.keys(), iter(client_metrics)):
+        tf.nest.map_structure(lambda v, t: v.assign(t), pr_auc.variables, list(metric['pr_auc']))
+        tf.nest.map_structure(lambda v, t: v.assign(t), roc_auc.variables, list(metric['roc_auc']))
+        tf.nest.map_structure(lambda v, t: v.assign(t), accuracy.variables, list(metric['accuracy']))
 
-        mlflow.log_metric(f'client_{i}_val_pr_auc', pr_auc.result().numpy())
-        mlflow.log_metric(f'client_{i}_val_roc_auc', roc_auc.result().numpy())
-        mlflow.log_metric(f'client_{i}_val_acc', accuracy.result().numpy())
+        mlflow.log_metric(f'client_{client}_val_pr_auc', pr_auc.result().numpy())
+        mlflow.log_metric(f'client_{client}_val_roc_auc', roc_auc.result().numpy())
+        mlflow.log_metric(f'client_{client}_val_acc', accuracy.result().numpy())
 
     return confusion_matrix, aggregated_metrics, client_metrics
 
@@ -209,9 +209,11 @@ def run(
 
     checkpoint_manager = tff.simulation.FileCheckpointManager(config.output)
 
-    client_idx2id = list(sorted(train.clients.union(test.clients)))
-    client_states = {i: client_state_fn(idx, pos_weight) for idx, (i, pos_weight) in
-                     enumerate(zip(client_idx2id, config.pos_weights))}
+	client_idx2id = list(sorted(train.clients.union(test.clients)))
+	client_states = {
+		i: client_state_fn(idx, pos_weight)
+		for idx, (i, pos_weight) in enumerate(zip(client_idx2id, config.pos_weights))
+	}
 
     train_step = partial(
         __train_step,

@@ -1,7 +1,7 @@
 from collections import namedtuple
-from functools import partial
+from functools import partial, reduce
 import os
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
 import matplotlib.pylab as plt
 import mlflow
@@ -10,29 +10,39 @@ import pandas as pd
 import seaborn as sns
 import tensorflow as tf
 
-from ocddetection import metrics, models
+from ocddetection import losses, metrics, models
 from ocddetection.data import preprocessing, SENSORS
-from ocddetection.types import FederatedDataset
 
 
 Config = namedtuple(
   'Config',
-  ['path', 'output', 'batch_size', 'window_size', 'hidden_size']
+  ['path', 'learning_rate', 'epochs', 'batch_size', 'window_size', 'pos_weight', 'hidden_size', 'dropout']
 )
 
 
-def __load_data(path, window_size, batch_size) -> FederatedDataset:
-  files = pd.Series(
-    [os.path.join(path, f'S{subject}-ADL4-AUGMENTED.csv') for subject in range(1, 5)],
-    index=list(range(1, 5)),
-    name='path'
-  )
+def __load_data(path, window_size, batch_size) -> Iterable[Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]]:
+  for i in range(1, 5):
+    files = pd.Series(
+      [os.path.join(path, f'S{subject}-ADL{run}-AUGMENTED.csv') for subject in range(1, 5) for run in range(1, 6)],
+      index=pd.MultiIndex.from_product([list(range(1, 5)), list(range(1, 6))]),
+      name='path'
+    )
 
-  return preprocessing.to_federated(files, 1, window_size, batch_size)
+    train_files, val_files, test_files = preprocessing.split(
+      files,
+      validation=[(subject, i) for subject in range(1, 5)],
+      test=[(subject, 5) for subject in range(1, 5)]
+    )
+
+    train = preprocessing.to_centralised(train_files, window_size, batch_size)
+    val = preprocessing.to_centralised(val_files, window_size, batch_size)
+    test = preprocessing.to_centralised(test_files, window_size, batch_size)
+
+    yield train, val, test
 
 
-def __model_fn(window_size: int, hidden_size: int) -> tf.keras.Model:     
-  return models.bidirectional(window_size, len(SENSORS), hidden_size, dropout=0.0, pos_weight=1.0)
+def __model_fn(window_size: int, hidden_size: int, dropout: float) -> tf.keras.Model:     
+  return models.bidirectional(window_size, len(SENSORS), hidden_size, dropout)
 
 
 def __metrics_fn() -> List[tf.keras.metrics.Metric]:
@@ -45,7 +55,30 @@ def __metrics_fn() -> List[tf.keras.metrics.Metric]:
   ]
 
 
-def __evaluation_step(
+def __optimizer_fn(learning_rate: float) -> tf.keras.optimizers.Optimizer:
+  return tf.keras.optimizers.SGD(learning_rate=learning_rate, momentum=0.9)
+
+
+def __train_step(
+  X: tf.Tensor,
+  y: tf.Tensor,
+  model: tf.keras.Model,
+  optimizer: tf.keras.optimizers.Optimizer,
+  loss_fn: tf.keras.losses.Loss
+) -> None:
+  with tf.GradientTape() as tape:
+    logits = model(X, training=True)
+    loss_value = loss_fn(y, logits)
+
+  optimizer.apply_gradients(
+    zip(
+      tape.gradient(loss_value, model.trainable_variables),
+      model.trainable_variables
+    )
+  )
+
+
+def __validation_step(
   state: tf.Tensor,
   batch: Tuple[tf.Tensor, tf.Tensor],
   model: tf.keras.Model,
@@ -63,53 +96,80 @@ def __evaluation_step(
 
 def run(experiment_name: str, run_name: str, config: Config) -> None:
   mlflow.set_experiment(experiment_name)
-  
-  val = __load_data(config.path, config.window_size, config.batch_size)
-  model = __model_fn(config.window_size, config.hidden_size)
-
-  ckpt = tf.train.Checkpoint(model=model)
-  ckpt_manager = tf.train.CheckpointManager(ckpt, config.output, max_to_keep=5)
-
-  if ckpt_manager.latest_checkpoint:
-    ckpt.restore(ckpt_manager.latest_checkpoint).expect_partial()
-
-  metrics = __metrics_fn()
-  step = partial(__evaluation_step, model=model, metrics=metrics)
-  state = tf.zeros((2, 2), dtype=tf.int32)
 
   with mlflow.start_run(run_name=run_name):
     mlflow.log_params(config._asdict())
 
-    for client in val.clients:
-      for metric in metrics:
-        metric.reset_states()
+    def reduce_fn(state, data):
+      model = __model_fn(config.window_size, config.hidden_size, config.dropout)
+      loss_fn = losses.WeightedBinaryCrossEntropy(config.pos_weight)
+      optimizer = __optimizer_fn(config.learning_rate)
 
-      # Evaluation
-      confusion_matrix = val.data[client].reduce(state, step)
+      input_spec = (
+        tf.TensorSpec((None, config.window_size, len(SENSORS)), dtype=tf.float32),
+        tf.TensorSpec((None, 1), dtype=tf.float32)
+      )
 
-      # Confusion matrix
-      fig, ax = plt.subplots(figsize=(16, 8))
+      train_step = tf.function(
+        partial(__train_step, model=model, optimizer=optimizer, loss_fn=loss_fn),
+        input_signature=input_spec
+      )
 
-      sns.heatmap(confusion_matrix, annot=True, fmt='d', cmap=sns.color_palette("Blues"), ax=ax)
+      val_state = tf.zeros((2, 2), dtype=tf.int32)
+      val_metrics = __metrics_fn()
+      val_step = partial(__validation_step, model=model, metrics=val_metrics)
+
+      for _ in range(1, config.epochs + 1):
+        for X, y in data[0]:
+          train_step(X, y)
       
-      ax.set_xlabel('Predicted')
-      ax.set_ylabel('Ground Truth')
+      confusion_matrix = data[1].reduce(val_state, val_step)
+      auc = val_metrics[0].result().numpy()
+      precision = val_metrics[1].result().numpy()
+      recall = val_metrics[2].result().numpy()
 
-      mlflow.log_figure(fig, f'confusion_matrix_{client}.png')
-      plt.close(fig)
+      return (
+        state[0] + confusion_matrix,
+        state[1] + [auc],
+        state[2] + [precision],
+        state[3] + [recall]
+      )
 
-      # AUC
-      mlflow.log_metric(f'auc_{client}', metrics[0].result().numpy())
+    confusion_matrix, auc, precision, recall = reduce(
+      reduce_fn,
+      __load_data(config.path, config.window_size, config.batch_size),
+      (
+        tf.zeros((2, 2), dtype=tf.int32),
+        [],
+        [],
+        []
+      )
+    )
 
-      # Precision Recall
-      fig, ax = plt.subplots(figsize=(16, 8))
-      sns.lineplot(x=metrics[1].result().numpy(), y=metrics[2].result().numpy(), ax=ax)
+    # Confusion matrix
+    fig, ax = plt.subplots(figsize=(16, 8))
 
-      ax.set_xlabel('Recall')
-      ax.set_xlim(0., 1.)
+    sns.heatmap(confusion_matrix, annot=True, fmt='d', cmap=sns.color_palette("Blues"), ax=ax)
+    
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('Ground Truth')
 
-      ax.set_ylabel('Precision')
-      ax.set_ylim(0., 1.)
+    mlflow.log_figure(fig, 'confusion_matrix.png')
+    plt.close(fig)
 
-      mlflow.log_figure(fig, f'precision_recall_{client}.png')
-      plt.close(fig)
+    # AUC
+    mlflow.log_metric('val_auc', np.mean(auc))
+
+    # Precision Recall
+    fig, ax = plt.subplots(figsize=(16, 8))
+
+    sns.lineplot(x=np.mean(recall, axis=0), y=np.mean(precision, axis=0), ax=ax)
+
+    ax.set_xlabel('Recall')
+    ax.set_xlim(0., 1.)
+
+    ax.set_ylabel('Precision')
+    ax.set_ylim(0., 1.)
+
+    mlflow.log_figure(fig, 'precision_recall.png')
+    plt.close(fig)

@@ -4,8 +4,6 @@ import attr
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.learning.federated.impl.layers import server, utils
-
 
 @attr.s(eq=False, frozen=True, slots=True)
 class State(object):
@@ -33,11 +31,9 @@ class Output(object):
         - `metrics`: A structure matching `tff.learning.Model.report_local_outputs`, reflecting the results of training on the input dataset.
         - `client_state`: The updated `State`
     """
-
-    weights_delta = attr.ib()
+    client_state = attr.ib()
     client_weight = attr.ib()
     metrics = attr.ib()
-    client_state = attr.ib()
 
 
 @attr.s(eq=False, frozen=True, slots=True)
@@ -48,6 +44,7 @@ class Validation(object):
     Fields:
         - `metrics`: A structure matching `tff.learning.Model.report_local_outputs`, reflecting the results of training on the input dataset.
     """
+
     metrics = attr.ib()
 
 
@@ -66,7 +63,6 @@ class Evaluation(object):
 def update(
     dataset: tf.data.Dataset,
     state: State,
-    message: server.Message,
     model_fn: Callable,
     optimizer_fn: Callable
 ) -> Output:
@@ -74,13 +70,12 @@ def update(
         model = model_fn(pos_weight=state.client_pos_weight)
         optimizer = optimizer_fn()
 
-    message.model.assign_weights_to(model.base_model)
-    state.model.assign_weights_to(model.personalized_model)
-
-    def training_fn(num_examples, batch):
+    state.model.assign_weights_to(model)
+    
+    def training_fn(state, batch):
         with tf.GradientTape() as tape:
             outputs = model.forward_pass(batch, training=True)
-        
+
         optimizer.apply_gradients(
             zip(
                 tape.gradient(outputs.loss, model.trainable_variables),
@@ -88,27 +83,20 @@ def update(
             )
         )
 
-        return num_examples + outputs.num_examples
-    
+        return state + outputs.num_examples
+
     client_weight = dataset.reduce(
         tf.constant(0, dtype=tf.int32),
         training_fn
     )
-
-    weights_delta = tf.nest.map_structure(
-        lambda a, b: a - b,
-        model.base_model.trainable_variables,
-        message.model.trainable
-    )
     
     return Output(
-        weights_delta=weights_delta,
         client_weight=tf.cast(client_weight, dtype=tf.float32),
         metrics=model.report_local_outputs(),
         client_state=State(
             client_index=state.client_index,
             client_pos_weight=state.client_pos_weight,
-            model=tff.learning.ModelWeights.from_model(model.personalized_model)
+            model=tff.learning.ModelWeights.from_model(model)
         )
     )
 
@@ -116,14 +104,12 @@ def update(
 def validate(
     dataset: tf.data.Dataset,
     state: State,
-    weights: tff.learning.ModelWeights,
     model_fn: Callable
 ) -> Validation:
     with tf.init_scope():
         model = model_fn(pos_weight=state.client_pos_weight)
-
-    weights.assign_weights_to(model.base_model)
-    state.model.assign_weights_to(model.personalized_model)
+    
+    state.model.assign_weights_to(model)
 
     for batch in dataset:
         model.forward_pass(batch, training=False)
@@ -136,14 +122,12 @@ def validate(
 def evaluate(
     dataset: tf.data.Dataset,
     state: State,
-    weights: tff.learning.ModelWeights,
     model_fn: Callable
 ) -> Evaluation:
     with tf.init_scope():
         model = model_fn(pos_weight=state.client_pos_weight)
 
-    weights.assign_weights_to(model.base_model)
-    state.model.assign_weights_to(model.personalized_model)
+    state.model.assign_weights_to(model)
 
     def evaluation_fn(state, batch):
         outputs = model.forward_pass(batch, training=False)

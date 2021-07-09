@@ -119,20 +119,18 @@ def update(
     message.model.assign_weights_to(global_model)
     state.model.assign_weights_to(local_model)
     __mix_weights(mixing_coefficient, state.model, message.model).assign_weights_to(mixed_model)
-    client_weight = tf.constant(0, dtype=tf.int32)
 
-    for batch in dataset:
+    def training_fn(num_examples, batch):
         with tf.GradientTape() as global_tape:
             global_outputs = global_model.forward_pass(batch, training=True)
 
         with tf.GradientTape() as mixed_tape:
             mixed_outputs = mixed_model.forward_pass(batch, training=True)
 
-        client_weight += global_outputs.num_examples
         global_gradients = global_tape.gradient(global_outputs.loss, global_model.trainable_variables)
         mixed_gradients = mixed_tape.gradient(mixed_outputs.loss, mixed_model.trainable_variables)
         coefficient_gradient = __mixing_gradient(mixed_gradients, local_model.trainable_variables, global_model.trainable_variables)
-        
+
         # Update global model
         global_optimizer.apply_gradients(
             zip(
@@ -162,6 +160,13 @@ def update(
             tff.learning.ModelWeights.from_model(local_model),
             tff.learning.ModelWeights.from_model(global_model)
         ).assign_weights_to(mixed_model)
+
+        return num_examples + global_outputs.num_examples
+
+    client_weight = dataset.reduce(
+        tf.constant(0, dtype=tf.int32),
+        training_fn
+    )        
 
     weights_delta = tf.nest.map_structure(
         lambda a, b: a - b,
