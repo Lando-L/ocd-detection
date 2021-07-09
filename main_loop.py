@@ -5,9 +5,10 @@ import sys
 
 total_rounds = 300
 hyperparameter_list = {
+    'learning-rate': [.001, .005],
     'clients-per-round': [2, 4],
-    'learning-rate': [.01, .05, .001],
-    'epochs': [1, 3]
+    'epochs': [1, 3],
+    'dropout': [0.2, 0.0]
 }
 fed_type = sys.argv[1]
 available_gpu = sys.argv[2]
