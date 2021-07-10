@@ -194,11 +194,13 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     def evaluate(confusion_matrix, client):
       # Reset PR-AUC and Accuracy metrics
       eval_metrics[0].reset_states()
-      eval_metrics[3].reset_states()
+      eval_metrics[1].reset_states()
+      eval_metrics[4].reset_states()
 
       results = test[client].reduce(eval_state, eval_step)
-      mlflow.log_metrics(f'client_{client}_val_auc', eval_metrics[0].result().numpy())
-      mlflow.log_metrics(f'client_{client}_val_acc', eval_metrics[3].result().numpy())
+      mlflow.log_metrics(f'client_{client}_val_pr_auc', eval_metrics[0].result().numpy())
+      mlflow.log_metrics(f'client_{client}_val_roc_auc', eval_metrics[1].result().numpy())
+      mlflow.log_metrics(f'client_{client}_val_acc', eval_metrics[4].result().numpy())
 
       return confusion_matrix + results
 

@@ -49,7 +49,8 @@ def __metrics_fn() -> List[tf.keras.metrics.Metric]:
   thresholds = list(np.linspace(0, 1, 200, endpoint=False))
 
   return [
-    metrics.AUC(from_logits=True, curve='PR', name='auc'),
+    metrics.AUC(from_logits=True, curve='PR', name='pr_auc'),
+    metrics.AUC(from_logits=True, curve='ROC', name='roc_auc'),
     metrics.Precision(from_logits=True, thresholds=thresholds, name='precision'),
     metrics.Recall(from_logits=True, thresholds=thresholds, name='recall')
   ]
@@ -124,18 +125,20 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
           train_step(X, y)
       
       confusion_matrix = data[1].reduce(val_state, val_step)
-      auc = val_metrics[0].result().numpy()
-      precision = val_metrics[1].result().numpy()
-      recall = val_metrics[2].result().numpy()
+      pr_auc = val_metrics[0].result().numpy()
+      roc_auc = val_metrics[1].result().numpy()
+      precision = val_metrics[2].result().numpy()
+      recall = val_metrics[3].result().numpy()
 
       return (
         state[0] + confusion_matrix,
-        state[1] + [auc],
-        state[2] + [precision],
-        state[3] + [recall]
+        state[1] + [pr_auc],
+        state[2] + [roc_auc],
+        state[3] + [precision],
+        state[4] + [recall]
       )
 
-    confusion_matrix, auc, precision, recall = reduce(
+    confusion_matrix, pr_auc, roc_auc, precision, recall = reduce(
       reduce_fn,
       __load_data(config.path, config.window_size, config.batch_size),
       (
@@ -158,7 +161,8 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
     plt.close(fig)
 
     # AUC
-    mlflow.log_metric('val_auc', np.mean(auc))
+    mlflow.log_metric('val_pr_auc', np.mean(pr_auc))
+    mlflow.log_metric('val_roc_auc', np.mean(roc_auc))
 
     # Precision Recall
     fig, ax = plt.subplots(figsize=(16, 8))
