@@ -35,7 +35,7 @@ def __load_data(path, window_size, batch_size) -> Tuple[tf.data.Dataset, tf.data
 
   train = preprocessing.to_centralised(train_files, window_size, batch_size)
   val = preprocessing.to_centralised(test_files, window_size, batch_size)
-  test = preprocessing.to_federated(test_files, window_size, batch_size)
+  test = preprocessing.to_federated(test_files, 1, window_size, batch_size)
 
   return train, val, test
 

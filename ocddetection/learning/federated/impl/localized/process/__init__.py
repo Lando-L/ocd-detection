@@ -3,7 +3,7 @@ from typing import Callable
 import tensorflow as tf
 import tensorflow_federated as tff
 
-from ocddetection.learning.federated.impl.localized import client
+from ocddetection.learning.federated.impl.localized import client, server
 
 
 MODEL_FN = Callable[[], tff.learning.Model]
@@ -12,6 +12,17 @@ CLIENT_STATE_FN = Callable[[], client.State]
 CLIENT_UPDATE_FN = Callable[[tf.data.Dataset, client.State, Callable, Callable, Callable], client.Output]
 VALIDATION_FN = Callable[[tf.data.Dataset, client.State, tff.learning.ModelWeights, tff.learning.Model], client.Validation]
 EVALUATION_FN = Callable[[tf.data.Dataset, client.State, tff.learning.ModelWeights, tff.learning.Model], client.Evaluation]
+
+
+def __initialize_server(
+  model_fn: MODEL_FN
+):
+  model = model_fn()
+
+  return server.State(
+    model=tff.learning.ModelWeights.from_model(model),
+    round_num=0
+  )
 
 
 def __update_client(
@@ -38,7 +49,9 @@ def iterator(
   client_state = client_state_fn()
 
   init_tf = tff.tf_computation(
-    lambda: ()
+    lambda: __initialize_server(
+        model_fn
+    )
   )
   
   server_state_type = init_tf.type_signature.result

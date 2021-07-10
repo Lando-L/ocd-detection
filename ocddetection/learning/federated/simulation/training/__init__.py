@@ -267,7 +267,6 @@ def run(
                 json.dump({key: float(value)}, metrics_file, indent=4)
         for i, m in enumerate(iter(client_metrics), start=1):
             for key, value in m.items():
-                print(f'{i} - {key}:{value}')
                 if isinstance(value, np.ndarray) or isinstance(value, tf.Tensor):
                     json.dump({f'client_{i}_{key}': value.tolist()}, metrics_file, indent=4)
                 if isinstance(value, tuple):
