@@ -163,6 +163,7 @@ def evaluator(
 
   dataset_type = tff.SequenceType(model.input_spec)
   client_state_type = tff.framework.type_from_tensors(client_state)
+  weights_type = tff.learning.framework.weights_type_from_model(model)
 
   evaluate_client_tf = tff.tf_computation(
     lambda dataset, state: __evaluate_client(
@@ -174,10 +175,11 @@ def evaluator(
     (dataset_type, client_state_type)
   )
 
+  federated_weights_type = tff.type_at_server(weights_type)
   federated_dataset_type = tff.type_at_clients(dataset_type)
   federated_client_state_type = tff.type_at_clients(client_state_type)    
 
-  def evaluate(datasets, client_states):
+  def evaluate(weights, datasets, client_states):
     outputs = tff.federated_map(evaluate_client_tf, (datasets, client_states))
     
     confusion_matrix = tff.federated_sum(outputs.confusion_matrix)
@@ -188,5 +190,5 @@ def evaluator(
 
   return tff.federated_computation(
     evaluate,
-    (federated_dataset_type, federated_client_state_type)
+    (federated_weights_type, federated_dataset_type, federated_client_state_type)
   )

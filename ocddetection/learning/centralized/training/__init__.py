@@ -197,10 +197,10 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
       eval_metrics[1].reset_states()
       eval_metrics[4].reset_states()
 
-      results = test[client].reduce(eval_state, eval_step)
-      mlflow.log_metrics(f'client_{client}_val_pr_auc', eval_metrics[0].result().numpy())
-      mlflow.log_metrics(f'client_{client}_val_roc_auc', eval_metrics[1].result().numpy())
-      mlflow.log_metrics(f'client_{client}_val_acc', eval_metrics[4].result().numpy())
+      results = test.data[client].reduce(eval_state, eval_step)
+      mlflow.log_metric(f'client_{client}_val_pr_auc', eval_metrics[0].result().numpy())
+      mlflow.log_metric(f'client_{client}_val_roc_auc', eval_metrics[1].result().numpy())
+      mlflow.log_metric(f'client_{client}_val_acc', eval_metrics[4].result().numpy())
 
       return confusion_matrix + results
 
@@ -223,7 +223,7 @@ def run(experiment_name: str, run_name: str, config: Config) -> None:
 
     # Precision Recall
     fig, ax = plt.subplots(figsize=(16, 8))
-    sns.lineplot(x=eval_metrics[2].results().numpy(), y=eval_metrics[1].results().numpy(), ax=ax)
+    sns.lineplot(x=eval_metrics[3].result().numpy(), y=eval_metrics[2].result().numpy(), ax=ax)
 
     ax.set_xlabel('Recall')
     ax.set_xlim(0., 1.)
